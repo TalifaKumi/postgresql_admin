@@ -1,0 +1,144 @@
+yum install -y https://centos7.iuscommunity.org/ius-release.rpm
+yum update
+yum install  -y epel-release
+yum upgrade
+Устанавливаем программы:
+
+сетевой протокол для терминала Telnet
+утилиту для сканирования IP-сетей Nmap
+систему управления версиями Git
+файловый менеджер MindCommander
+yum install -y telnet
+yum install nmap
+yum -y install git  
+yum -y install mc  
+Устанавливаем СУБД PostgreSQL:
+
+rpm -ivh https://yum.postgresql.org/9.6/redhat/rhel-7.3-x86_64/pgdg-centos96-9.6-3.noarch.rpm
+yum install postgresql96 postgresql96-server postgresql96-libs postgresql96-contrib postgresql96-devel
+
+rpm -ivh https://yum.postgresql.org/11/redhat/rhel-7.6-ppc64le/pgdg-redhat11-11-2.noarch.rpm
+yum install https://download.postgresql.org/pub/repos/yum/11/redhat/rhel-7-x86_64/pgdg-redhat11-11-2.noarch.rpm
+yum install postgresql11 postgresql11-server
+Устанавливаем интерпретатор языка программирования Python, с которым устанавливается также система управления пакетами pip, которая используется для установки и управления программными пакетами, написанными на Python:
+
+yum install -y python36u python36u-libs python36u-devel python36u-pip
+python3.6 -V
+pip3.6 install --upgrade pip
+yum install -y gcc
+pip3 install psycopg2-binary
+
+yum -y install keepalived
+yum install -y etcd haproxy libyaml
+Дописываем алиасы в файл hosts:
+cat >> /etc/hosts << EOF
+192.168.100.132  pg-node-01 pg-node-01.BU1.loc
+192.168.100.133  pg-node-02 pg-node-01.BU1.loc
+192.168.100.134  pg-node-03 pg-node-01.BU1.loc
+EOF
+Создаем копию репозитория Patroni в папке local:
+
+cd /usr/local
+git clone https://github.com/zalando/patroni.git
+Настраиваем фаервол - демон firewalld, проявляя заботу о синхронизации времени:
+
+systemctl stop firewalld
+yum install -y ntp && systemctl enable ntpd && systemctl start ntpd && timedatectl set-ntp true
+firewall-cmd --add-port=2379-2380/tcp --permanent && firewall-cmd --complete-reload && firewall-cmd --list-all
+firewall-cmd --add-port=5432/tcp --permanent && firewall-cmd --complete-reload && firewall-cmd --list-all
+firewall-cmd --add-port=8008-8010/tcp --permanent && firewall-cmd --complete-reload && firewall-cmd --list-all
+firewall-cmd --add-port=4001/tcp --permanent && firewall-cmd --complete-reload && firewall-cmd --list-all
+Настройка балансировщика нагрузки haproxy:
+
+HOST_1=192.168.100.132
+HOST_2=192.168.100.133
+HOST_3=192.168.100.134
+sed -i "s/server postgresql_127\.0\.0\.1_5432 127\.0\.0\.1:5432 maxconn 100 check port 8008/server postgresql_${HOST_1}_5432 ${HOST_1}:5432 maxconn 100 check port 8008/g" $HOME_PATRONI/haproxy.cfg 
+sed -i "s/server postgresql_127\.0\.0\.1_5433 127\.0\.0\.1:5433 maxconn 100 check port 8009/server postgresql_${HOST_2}_5433 ${HOST_2}:5433 maxconn 100 check port 8009/g" $HOME_PATRONI/haproxy.cfg
+echo "    server postgresql_${HOST_3}_5434 ${HOST_3}:5434 maxconn 100 check port 8010" >> $HOME_PATRONI/haproxy.cfg
+Здесь мы, используя переменные, обновляем конфигурацию Patroni в файле haproxy.cfg с помощью потокового редактора sed, который заменяет в этом фале имена хостов, на прописанные в переменных.
+C помощью команды echo просто дописываем строку в этот же файл.
+
+Запускается и останавливается служба haproxy с помощью системной утилиты systemctl. После изменения конфигурации, чтобы новые параметры вступили в силу, службу надо перестартовывать.
+
+systemctl stop haproxy
+systemctl start haproxy
+Разборки с хранилищем параметров кофигурации etcd. Выводим незакомментированные строки конфигурации демона etcd:
+
+[root@node-1 etcd]#  cat /etc/etcd/etcd.conf |grep -v ^# |grep -v ^$
+
+ ETCD_DATA_DIR="/var/lib/etcd/default.etcd"
+   ETCD_LISTEN_PEER_URLS="http://10.10.11.191:2380"
+   ETCD_LISTEN_CLIENT_URLS="http://10.10.11.191:2379"
+   ETCD_NAME="node-01"
+   ETCD_INITIAL_ADVERTISE_PEER_URLS="http://10.10.11.191:2380"
+   ETCD_ADVERTISE_CLIENT_URLS="http://10.10.11.191:2379"
+   ETCD_INITIAL_CLUSTER="node-01=http://10.10.11.191:2380,node-02=http:/10.10.11.168:2380,node-03=http:/1..."
+Добавляем демон etcd в автозагрузку:
+
+systemctl enable etcd.service
+Примеры остановки и запуска демона etcd:
+
+systemctl stop etcd
+systemctl start etcd
+Смотреть логи по юниту etcd:
+
+journalctl -u etcd.service
+Подошла очередь для демона keepalived, может использоваться для мониторинга сервисов или систем и автоматического перехода на резервный ресурс в режиме ожидания в случае возникновения проблем.
+
+cp -Rp /etc/keepalived/keepalived.conf /etc/keepalived/keepalived.conf.src
+cat <<'_EOF_'> /etc/keepalived/keepalived.conf
+vrrp_script haproxy {
+        script "pidof haproxy"
+        interval 2
+        weight 2
+}
+
+vrrp_instance BALANCER_1 {
+        state MASTER
+        interface ens192
+        smtp_alert
+        virtual_router_id 202
+        priority 100
+        advert_int 1
+        authentication {
+                auth_type PASS
+                auth_pass password
+        }
+        virtual_ipaddress {
+                192.168.100.100/24 dev ens192
+        }
+        track_script {
+                haproxy
+        }
+}
+_EOF_
+
+systemctl start keepalived.service
+Здесь мы сначала сделали копию keepalived.conf в keepalived.conf.src, потом записали в keepalived.conf новое содержимое и стартанули сервис.
+
+Непосредственная установка Patroni
+В директории /usr/local/patroni в файлах *.yml хранятся сериализированные данные на языке YAML для узлов, с которыми работает Patroni - в этих файлах надо прописать IP под master и standby:
+
+postgres0.yml - для master
+postgres1.yml и postgres2.yml - для standby
+Для запуска Patroni нужно:
+
+pip3.6 install patroni
+pip3.6 install patroni[etcd]
+mkdir /usr/local/logs
+chmod 777 /usr/local/logs
+su postgres
+cd /usr/local/patroni
+python3.6 patroni.py postgres0.yml > /usr/local/logs/patroni.log 2>&1  &
+python3.6 patroni.py postgres1.yml > /usr/local/logs/patroni.log 2>&1  &
+python3.6 patroni.py postgres2.yml > /usr/local/patroni/logs/patroni.log 2>&1  &
+ 
+
+https://www.youtube.com/watch?v=lMPYerAYEVs&feature=youtu.be
+
+ 
+
+Еще в репозитории есть пример юнита для systemd: https://github.com/zalando/patroni/blob/master/extras/startup-scripts/patroni.service
+ 
+Если хочется собрать rpm, то стоит посмотреть вот сюда: https://github.com/cybertec-postgresql/patroni-packaging/tree/master/RPM
