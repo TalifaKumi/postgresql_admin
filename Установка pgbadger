@@ -1,0 +1,20 @@
+log_min_duration_statement = 0
+log_line_prefix = '%t [%p]: [%l-1] ' или '%t [%p]: [%l-1] user=%u,db=%d,client=%h '
+log_checkpoints = on
+log_connections = on
+log_disconnections = on
+log_lock_waits = on
+log_temp_files = 0
+log_autovacuum_min_duration = 0
+lc_messages='C'
+log_duration = on
+log_statement = all
+log_destination = stderr
+ 
+
+sudo yum install pgbadger
+  на DEV sshpass -p ".."  
+  scp -p   /var/lib/pgsql/9.6/data/pg_log/*.log   
+  if@10.10.9.5:/var/log/postgresquerylog/  
+  cat /var/log/postgresquerylog/*.log | grep -viE "create index|insert into analytics|vacuum analyze analytics" > /var/log/postgresquerylog/pg_clean.log   
+  pgbadger -j 4  /var/log/postgresquerylog/pg_clean.log
