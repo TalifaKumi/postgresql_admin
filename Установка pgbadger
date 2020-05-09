@@ -18,3 +18,5 @@ sudo yum install pgbadger
   if@10.10.9.5:/var/log/postgresquerylog/  
   cat /var/log/postgresquerylog/*.log | grep -viE "create index|insert into analytics|vacuum analyze analytics" > /var/log/postgresquerylog/pg_clean.log   
   pgbadger -j 4  /var/log/postgresquerylog/pg_clean.log
+  
+  https://github.com/dalibo/pgbadger
