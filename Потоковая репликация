@@ -1,0 +1,124 @@
+Создаем пользователя в PostgreSQL  
+Входим в систему под пользователем postgres:
+
+su - postgres
+
+Создаем нового пользователя для репликации:
+
+createuser --replication -P repluser
+
+* система запросит пароль — его нужно придумать и ввести дважды. В данном примере мы создаем пользователя repluser.
+
+Выходим из оболочки пользователя postgres:
+
+exit
+
+Настраиваем postgresql
+Открываем конфигурационный файл postgresql.conf.
+
+vi /etc/postgresql/9.6/main/postgresql.conf
+
+* мы открываем файл, который получили sql-командой SHOW config_file;.
+
+Редактируем следующие параметры:
+
+listen_addresses = 'localhost, 192.168.1.10'
+wal_level = replica
+max_wal_senders = 2
+max_replication_slots = 2
+hot_standby = on
+hot_standby_feedback = on
+
+* где
+
+192.168.1.10 — IP-адрес сервера, на котором он будем слушать запросы Postgre; 
+wal_level указывает, сколько информации записывается в WAL (журнал операций, который используется для репликации); 
+max_wal_senders — количество планируемых слейвов; 
+max_replication_slots — максимальное число слотов репликации (данный параметр не нужен для postgresql 9.2 — с ним сервер не запустится); 
+hot_standby — определяет, можно или нет подключаться к postgresql для выполнения запросов в процессе восстановления; 
+hot_standby_feedback — определяет, будет или нет сервер slave сообщать мастеру о запросах, которые он выполняет.
+Открываем конфигурационный файл pg_hba.conf — он находитсяч в том же каталоге, что и файл postgresql.conf:
+
+vi /etc/postgresql/9.6/main/pg_hba.conf
+
+Добавляем следующие строки:
+
+host replication repluser 127.0.0.1/32 md5
+host replication repluser 192.168.1.10/32 md5
+host replication repluser 192.168.1.11/32 md5
+
+* данной настройкой мы разрешаем подключение к базе данных replication пользователю repluser с локального сервера (localhost и 192.168.1.10) и сервера 192.168.1.11.
+
+Перезапускаем службу postgresql:
+
+systemctl restart postgresql
+
+* обратите внимание, что название для сервиса в системах Linux может различаться.
+
+3. Настройки на Slave
+Смотрим путь до конфигурационного файла postgresql:
+
+su - postgres -c "psql -c 'SHOW data_directory;'" 
+
+В моем случае путь был:
+
+/var/lib/pgsql/9.6/data
+
+Также смотрим путь до конфигурационного файла postgresql.conf (нам это понадобиться ниже):
+
+su - postgres -c "psql -c 'SHOW config_file;'"
+
+Останавливаем сервис postgresql:
+
+systemctl stop postgresql
+
+На всякий случай, создаем архив базы:
+
+tar -czvf /tmp/data_pgsql.tar.gz /var/lib/pgsql/9.6/data
+
+* в данном примере мы сохраним все содержимое каталога /var/lib/pgsql/9.6/data в виде архива /tmp/data_pgsql.tar.gz.
+
+Удаляем содержимое каталога с данными:
+
+rm -rf /var/lib/pgsql/9.6/data/*
+
+И реплицируем данные с master сервера.
+
+а) Если у нас postgresql 9:
+su -u postgres -с "pg_basebackup -h 192.168.1.10 -U repluser -D /var/lib/pgsql/9.6/data --xlog-method=stream --write-recovery-conf"
+* где 192.168.1.10 — IP-адрес мастера; /var/lib/pgsql/9.6/data — путь до каталога с данными.
+
+б) Если у нас postgresql 10:
+su - postgres -c "pg_basebackup --host=192.168.1.10 --username=repluser --pgdata=/var/lib/pgsql/10/data --wal-method=stream --write-recovery-conf"
+* где 192.168.1.10 — IP-адрес мастера; /var/lib/pgsql/10/data — путь до каталога с данными.
+
+pg_basebackup -h 192.168.170.161 -U replicator -D /var/lib/pgsql/11/data/ -P --password --slot replicator
+
+
+После ввода команды система запросит пароль для созданной ранее учетной записи repluser — вводим его. Начнется процесс клонирования данных.
+
+Открываем конфигурационный файл postgresql.conf на слейве:
+
+vi /etc/postgresql/9.6/main/postgresql.conf
+
+И редактируем следующие параметры:
+
+listen_addresses = 'localhost, 192.168.1.11'
+
+* где 192.168.1.11 — IP-адрес нашего вторичного сервера.
+
+Снова запускаем сервис postgresql:
+
+systemctl start postgresql
+
+4. Проверка репликации
+Посмотреть статус
+Статус работы репликации можно посмотреть следующими командами.
+
+На мастере:
+
+=# select * from pg_stat_replication;
+
+На слейве:
+
+=# select * from pg_stat_wal_receiver;
