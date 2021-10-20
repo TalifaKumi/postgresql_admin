@@ -1,12 +1,3 @@
-In this tutorial i will explained about how to enable archivelog in postgresql server
-WAL Archive log In PostgreSQL database system, the actual database 'writes' to an addition file called write-ahead log (WAL) to disk.
-It contains a record of writes that made in the database system. In the case of Crash, database can be repaired/recovered from these records.
-Normally, the write-ahead log logs at regular intervals (called Checkpoints) matched against the database and then deleted because it no longer is required. You can also use the WAL as a backup because,there is a record of all writes made to the database.
-WAL Archiving Concept :
-In pg_xlog write ahead logs are stored. It is the log file, where all the logs are stored of committed and uncommitted transaction. It contains max 6 logs, and last one overwrites. If archiver is on, it moves there.
-The write-ahead log is composed of each 16 MB large, which are called segments. 
-The WALs reside under pg_xlog directory and it is the subdirectory of 'data directory'. The filenames will have numerical(0-9) and character(a-z) named in ascending order by PostgreSQL Instance. To perform a backup on the basis of WAL, one needs a basic backup that is, a complete backup of the data directory, and the WAL Segments between the base backup and the current date.
---First check the postgresql server whether archive log  already enable or not using psql terminal.
 postgres=# show archive_mode;
  archive_mode 
 --------------
