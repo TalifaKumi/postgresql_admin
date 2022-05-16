@@ -1,0 +1,41 @@
+
+HOST=`hostname --short`
+ADMIN_MAILS="i.fast@km-bank.ru"
+ARE_THERE_ERROR=false
+CURRENT_DATE=`date +"%Y%m%d%H%M"`
+LOG_FILE=/data/backups/fis_backup-last.log
+LOG_FILE_HIST=/data/backups/fis_backup-hist.log
+DIR="/data/backups/fis-db_$(date +%Y-%m-%d_%H-%M-%S)"
+DIR_LOGS_Y=fis-log_$(date -d "-1 day" +"%Y-%m-%d")
+DIR_LOGS=fis-log_$(date +"%Y-%m-%d")
+echo $DIR_LOGS
+date > ${LOG_FILE}
+
+test -f /data/backups/ready && rm /data/backups/ready
+pg_basebackup -z -Z 9 --format=tar -h localhost -U postgres -D "${DIR}" >> ${LOG_FILE}
+if [ $? -eq 0 ]
+  then
+    echo -e "Fis DB backed up succesfully.\n" >> ${LOG_FILE}
+    date >> ${LOG_FILE}
+  else
+    echo -e "Fis DB backup ERROR: $?" >> ${LOG_FILE}
+    ARE_THERE_ERROR=true
+fi
+
+ls -la ${DIR} >> ${LOG_FILE}
+tar -czvf /data/backups/$DIR_LOGS.tar.gz /data/archivelogs/$DIR_LOGS/
+ls -l /data/backups/$DIR_LOGS.tar.gz >> ${LOG_FILE}
+tar -czvf /data/backups/$DIR_LOGS_Y.tar.gz /data/archivelogs/$DIR_LOGS_Y/
+ls -l /data/backups/$DIR_LOGS_Y.tar.gz >> ${LOG_FILE}
+
+SUBJECT="Fis DB backup"
+
+if ${ARE_THERE_ERROR}
+then
+    cat ${LOG_FILE} | /bin/mail -s "${HOST} ${SUBJECT} ERROR" $ADMIN_MAILS
+#    echo "ERROR" > /data/backups/ready
+else
+    cat ${LOG_FILE} | /bin/mail -s "${HOST} ${SUBJECT} OK" $ADMIN_MAILS
+    echo "OK" > /data/backups/ready
+fi
+cat $LOG_FILE >> $LOG_FILE_HIST
