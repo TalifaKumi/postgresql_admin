@@ -1,0 +1,68 @@
+https://eax.me/prometheus-and-grafana/
+
+Запускаем Prometheus
+Выполняем следующие команды:
+
+useradd --no-create-home --shell /bin/false prometheus
+# Свежий пакет находим здесь:
+# https://github.com/prometheus/prometheus/releases
+wget https://github.com/prometheus/prometheus/releases/prometheus-2.6.0.linux-amd64.tar.gz
+
+C:\work\pscp C:\Users\ifast\downloads\prometheus-2.34.0.linux-amd64.tar.gz root@172.17.10.130:/root/monitoring/
+
+tar -xvzf prometheus-2.34.0.linux-amd64.tar.gz
+
+cp prometheus-2.34.0.linux-amd64.tar.gz/prometheus /usr/local/bin/
+cp prometheus-2.34.0.linux-amd64.tar.gz/promtool /usr/local/bin/
+
+mkdir /etc/prometheus
+cp -r prometheus-2.6.0.linux-amd64/consoles/   /etc/prometheus/consoles
+cp -r prometheus-2.6.0.linux-amd64/console_libraries/   /etc/prometheus/console_libraries
+cp prometheus-2.6.0.linux-amd64/prometheus.yml   /etc/prometheus/
+chown -R prometheus:prometheus /etc/prometheus
+
+mkdir /var/lib/prometheus
+chown prometheus:prometheus /var/lib/prometheus
+
+Правим /etc/prometheus/prometheus.yml, указывая, где искать Node Exporter:
+
+# ...
+
+# Важно! В YAML запрещено использовать табуляцию.
+# Все отступы - это два пробела.
+
+scrape_configs:
+  - job_name: 'prometheus'
+    # ... тут все оставляем как было ...
+  - job_name: 'node_localhost'
+    static_configs:
+    - targets: ['localhost:9100']
+Создаем /etc/systemd/system/prometheus.service:
+
+[Unit]
+Description=Prometheus
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=prometheus
+Group=prometheus
+ExecStart=/usr/local/bin/prometheus \
+    --config.file /etc/prometheus/prometheus.yml \
+    --storage.tsdb.path /var/lib/prometheus/ \
+    --web.console.templates=/etc/prometheus/consoles \
+    --web.console.libraries=/etc/prometheus/console_libraries
+
+[Install]
+WantedBy=default.target
+Запускаем Prometheus:
+
+systemctl stop prometheus
+systemctl daemon-reload
+systemctl start prometheus
+systemctl status prometheus
+systemctl enable prometheus
+Проверяем, что Prometheus отдает свои собственные метрики:
+
+curl 'localhost:9090/metrics'
+Простенький веб-интерфейс, который я упоминал выше, живет на том же порту.
