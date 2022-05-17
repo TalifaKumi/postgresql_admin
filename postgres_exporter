@@ -1,0 +1,98 @@
+https://fatdba.com/2021/03/24/how-to-monitor-your-postgresql-database-using-grafana-prometheus-postgres_exporter/
+https://mcs.mail.ru/docs/additionals/cases/cases-monitoring/case-psql-exporter
+https://fatdba.com/2021/03/24/how-to-monitor-your-postgresql-database-using-grafana-prometheus-postgres_exporter/
+
+yum install -y postgres_exporter
+
+postgres_exporter_v0.5.1_linux-amd64.tar.gz
+
+C:\work\pscp C:\Users\ifast\downloads\postgres_exporter_v0.10.0_linux-amd64.tar.gz root@172.17.10.130:/root/monitoring/
+
+https://github.com/wrouesnel/postgres_exporter/releases/download/v0.10.0/postgres_exporter_v0.10.0_linux-amd64.tar.gz
+
+wget https://github.com/wrouesnel/postgres_exporter/releases/download/v0.5.1/postgres_exporter_v0.5.1_linux-amd64.tar.gz
+
+
+cd /root/monitoring/
+tar -xzvf postgres_exporter_v0.8.0_linux-amd64.tar.gz
+cd postgres_exporter_v0.6.0_linux-amd64
+sudo cp postgres_exporter /usr/local/bin
+
+
+cd /opt/postgres_exporter
+sudo nano postgres_exporter.env
+
+
+# or you can use the following to monitor all the databases available on localhost 
+DATA_SOURCE_NAME="postgresql://postgres:postgres@localhost:5432/?sslmode=disable"
+
+В файле prometheus.yml для работы с postgres_exporter в scrape_configs добавьте следующую секцию:
+
+
+scrape_configs:
+  - job_name: postgresql
+    static_configs:
+      - targets: ['ip-адрес-postgres-exporter:9187']
+        labels:
+          alias: postgres
+
+
+Создаем /etc/systemd/system/postgres_exporter.service:
+===============================================================
+
+
+[Unit]
+Description=Prometheus exporter for Postgresql
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=postgres
+Group=postgres
+WorkingDirectory=/opt/postgres_exporter
+EnvironmentFile=/opt/postgres_exporter/postgres_exporter.env
+ExecStart=/usr/local/bin/postgres_exporter --web.listen-address=:9187 --web.telemetry-path=/metrics
+Restart=always
+[Install]
+WantedBy=default.target
+
+
+systemctl stop postgres_exporter
+systemctl daemon-reload
+systemctl start postgres_exporter
+systemctl enable postgres_exporter
+systemctl status postgres_exporter
+
+systemctl stop  postgresql-11
+systemctl daemon-reload
+systemctl start  postgresql-11
+systemctl enable  postgresql-11
+systemctl status  postgresql-11
+
+
+
+sudo systemctl stop prometheus
+sudo nano /etc/prometheus/prometheus.yml
+Then, add the new targets to scrape
+
+— job_name: ‘postgres_exporter’
+    static_configs:
+    — targets: [‘xxx.xxx.xxx.xxx:9187’]
+Finally, reload the service
+
+В файле prometheus.yml для работы с postgres_exporter в scrape_configs добавьте следующую секцию:
+
+
+scrape_configs:
+  - job_name: "postgresql_exporter"
+    static_configs:
+      - targets: ["localhost:9187"]
+        labels:
+          alias: postgres
+
+sudo systemctl start prometheus
+sudo systemctl status prometheus
+
+http://172.17.10.130:9090/graph
+http://172.17.10.130:9090/targets
+http://172.17.10.130:3000/dashboard/import
