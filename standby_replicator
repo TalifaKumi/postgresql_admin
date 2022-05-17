@@ -1,0 +1,33 @@
+systemctl stop postgresql-11
+==== настроить pg_hba.conf  на проде
+погасить на старом стендбае
+освободить калог /var/lib/pgsql/11/data/
+pg_basebackup -h 192.168.170.161 -U replicator -D /var/lib/pgsql/11/data/ -P --password --slot replicator
+
+настроить recover.conf
+ systemctl start postgresql-11
+
+
+==================================================================  Дима дал
+pg_basebackup -h 172.16.231.11 -U replicator -D /var/lib/pgsql/11/data/ -P --password --slot replicator
+==================================================================
+pg_basebackup -h 192.168.170.171 -U replicator -D /var/lib/pgsql/11/data/ -P  --password  --slot replicator
+
+ pg_basebackup -h 192.168.170.161 -U replicator -D /var/lib/pgsql/11/data/ -P --password --slot replicator
+--pg_basebackup -h 192.168.199.137 -D /var/lib/postgresql/11/main/ -P -U replication --wal-method=fetch
+
+
+
+user=replicator password=rePl!paSs
+
+postgres@fis-db-2:~/11/data/pg_wal $ ping fis-db-1
+PING fis-db-1.bankom.omsk.su (192.168.170.161) 56(84) bytes of data.
+
+postgres@fis-db-1:~ $ ping fis-db-2
+PING fis-db-2.bankom.omsk.su (172.16.231.11) 56(84) bytes of 
+psql -x -c "SELECT * FROM pg_stat_replication;" | mailx -s "replication status" itsupport@plus-bank.ru
+psql -x -c "SELECT * FROM pg_stat_replication;"
+psql -c "select 1;"
+
+psql -x -c "SELECT * FROM pg_stat_replication;"
+psql -x -c "SELECT * FROM pg_stat_replication;" | mailx -s "replication status" i.fast@km-bank.ru
