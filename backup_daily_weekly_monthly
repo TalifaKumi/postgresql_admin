@@ -1,0 +1,168 @@
+ cat confluence-srv-2-backup.sh
+#!/bin/bash
+# Backup confluence DB and files
+# Store backup according policy
+# Current policy:
+#                   Daily backup - store 7 days,
+#                   Weekly backup - store last 4,
+#                   Monthly backup - store last 12,
+#Every day:
+#         make a backup, put into daily directory
+#         remove everything but the last 7 daily backups
+#Every week:
+#         make a backup, put into weekly directory
+#         remove everything but the last 5 weekly backups
+#Every month:
+#         make a backup, put into monthly directory
+#         remove everything but the last 12 monthly backups
+
+HOST=`hostname --short`
+BACKUP_DIR="/backup/${HOST}"
+BACKUP_DATE=`date +"%Y%m%d%H%M"`
+
+DAILY_DIR=$BACKUP_DIR/daily
+WEEKLY_DIR=$BACKUP_DIR/weekly
+MONTHLY_DIR=$BACKUP_DIR/monthly
+
+USER=postgres
+DB_FILE="${HOST}-db-${BACKUP_DATE}.sql.gz"
+BACKUP_FILES="${HOST}-files-${BACKUP_DATE}.tar.gz"
+FILELIST=/root/bin/filelist
+ADMIN_MAILS="a.ivanov@plus-bank.ru,SNMP_Monitor@km-bank.ru"
+LOG_FILE=/var/log/conf_backup-"${BACKUP_DATE}".log
+TAR=/bin/tar
+PIGZ=/bin/pigz
+MAIL=/bin/mail
+CP=/bin/cp
+PG_DUMPALL=/bin/pg_dumpall
+ARE_THERE_ERROR=false
+
+BACKUP_TYPE=daily
+month_day=`date +"%d"`
+week_day=`date +"%u"`
+SUBJECT=""
+
+date > ${LOG_FILE}
+if [ ! -f "$FILELIST" ]; then
+    echo "$FILELIST does not exist." >> ${LOG_FILE}
+    SUBJECT="Confluence files backup ERROR!"
+    cat ${LOG_FILE}| tr -d \\r | ${MAIL} -s "${HOST} ${SUBJECT} ERROR!" $ADMIN_MAILS
+    exit
+fi
+
+# Detect the backup type
+# On first month day do
+if [ "$month_day" -eq 1 ] ; then
+  BACKUP_TYPE=monthly
+else
+  # On saturdays do
+  if [ "$week_day" -eq 6 ] ; then
+    BACKUP_TYPE=weekly
+  else
+    # On any regular day do
+    BACKUP_TYPE=daily
+  fi
+fi
+
+# Always place backup files to the daily directory
+mkdir -p ${DAILY_DIR}
+
+echo -e "--- BACKUP OF POSTGRES DATABASES ---" >> ${LOG_FILE}
+(${PG_DUMPALL} -U $USER | $PIGZ > "${DAILY_DIR}/${DB_FILE}" ) >>${LOG_FILE} 2>&1
+ls -la "${DAILY_DIR}/${DB_FILE}" >> ${LOG_FILE}
+
+#Backup of confluence files
+echo -e "--- BACKUP OF CONFLUENCE FILES ---" >> ${LOG_FILE}
+$TAR --use-compress-program="pigz" -cf "${DAILY_DIR}/${BACKUP_FILES}" -T ${FILELIST} >> ${LOG_FILE}
+if [ $? -eq 0 ]
+    then
+        ls -la "${DAILY_DIR}/${BACKUP_FILES}" >> ${LOG_FILE}
+        echo -e "Confluence files backup completed succesfully.\n" >> ${LOG_FILE}
+    else
+        echo -e "Confluence files backup ERROR: $?" >> ${LOG_FILE}
+        SUBJECT="Confluence files backup ERROR!"
+        cat ${LOG_FILE}| tr -d \\r | ${MAIL} -s "${HOST} ${SUBJECT} ERROR!" $ADMIN_MAILS
+        exit
+fi
+
+# Leave only 7 last daily backups. Keep last 16 files
+if [ ARE_THERE_ERROR=false ]
+then
+        (cd ${DAILY_DIR} && ls -tp | grep -v '/$' | tail -n +15 | xargs -d '\n' -r rm --)
+        ls -lah ${DAILY_DIR} >> ${LOG_FILE}
+fi
+
+case $BACKUP_TYPE in
+  daily)
+    echo "Daily backup" >> ${LOG_FILE}
+    ;;
+  weekly)
+    mkdir -p ${WEEKLY_DIR}
+    echo "Weekly backup" >> ${LOG_FILE}
+    # Copy daily database backup to weekly folder
+    $CP "${DAILY_DIR}/${DB_FILE}" ${WEEKLY_DIR}
+    if [ $? -eq 0 ]
+    then
+      echo -e "${DAILY_DIR}/${DB_FILE} copied succesfully.\n" >> ${LOG_FILE}
+    else
+      echo -e "${DAILY_DIR}/${DB_FILE} copy ERROR: $?" >> ${LOG_FILE}
+      ARE_THERE_ERROR=true
+    fi
+    # Copy daily files to weekly folder
+    $CP "${DAILY_DIR}/${BACKUP_FILES}" ${WEEKLY_DIR}
+    if [ $? -eq 0 ]
+    then
+      echo -e "${DAILY_DIR}/${BACKUP_FILES} copied succesfully.\n" >> ${LOG_FILE}
+    else
+      echo -e "${DAILY_DIR}/${BACKUP_FILES} copy ERROR: $?" >> ${LOG_FILE}
+      ARE_THERE_ERROR=true
+    fi
+
+    # Leave only 4 last weekly backups
+    if [ ARE_THERE_ERROR=false ]
+    then
+        (cd ${WEEKLY_DIR} && ls -tp | grep -v '/$' | tail -n +9 | xargs -d '\n' -r rm --)
+        ls -lah ${WEEKLY_DIR} >> ${LOG_FILE}
+    fi
+  ;;
+  monthly)
+    echo "Monthly backup"  >> ${LOG_FILE}
+    # Copy database backup to monthly folder
+    mkdir -p ${MONTHLY_DIR}
+    $CP "${DAILY_DIR}/${DB_FILE}" ${MONTHLY_DIR}
+    if [ $? -eq 0 ]
+    then
+      echo -e "${DAILY_DIR}/${DB_FILE} copied succesfully.\n" >> ${LOG_FILE}
+    else
+      echo -e "${DAILY_DIR}/${DB_FILE} copy ERROR: $?" >> ${LOG_FILE}
+      ARE_THERE_ERROR=true
+    fi
+
+    # Copy daily files to monthly folder
+    $CP "${DAILY_DIR}/${BACKUP_FILES}" ${MONTHLY_DIR}
+    if [ $? -eq 0 ]
+    then
+      echo -e "${DAILY_DIR}/${BACKUP_FILES} copied succesfully.\n" >> ${LOG_FILE}
+    else
+      echo -e "${DAILY_DIR}/${BACKUP_FILES} copy ERROR: $?" >> ${LOG_FILE}
+      ARE_THERE_ERROR=true
+    fi
+
+    # Leave only 12 last monthly backups
+    (cd ${MONTHLY_DIR} && ls -tp | grep -v '/$' | tail -n +25 | xargs -d '\n' -r rm --)
+    ls -lah ${MONTHLY_DIR} >> ${LOG_FILE}
+  ;;
+#   *)
+#    echo "Others"
+#    ;;
+esac
+
+SUBJECT="${BACKUP_TYPE} backup"
+date >> ${LOG_FILE}
+if ${ARE_THERE_ERROR}
+then
+    cat ${LOG_FILE}| tr -d \\r | ${MAIL} -s "${HOST} ${SUBJECT} ERROR!" $ADMIN_MAILS
+else
+    cat ${LOG_FILE}| tr -d \\r | ${MAIL} -s "${HOST} ${SUBJECT} OK!" $ADMIN_MAILS
+fi
+
