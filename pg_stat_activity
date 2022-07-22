@@ -1,0 +1,187 @@
+
+Представление показывает одну строку на каждое подключение в базе. Каждому такому подключению соответствует выделенный UNIX процесс. Каждое подключение описывается следующими атрибутами:
+pid - идентификатор unix процесса который обслуживает подключение. В терминологии постгреса этот процесс называется бэкендом.
+datid, datname - идентификатор и имя базы к которой выполнено подключение.
+usesysid, usename - идентификатор и имя роли которое использовалось при подключении.
+client_addr, client_port, client_hostname - сетевые реквизиты клиента, его адрес, порт и имя.
+application_name - произвольное имя, которое может быть задано при установке подключения, либо во время сессии.
+backend_start, xact_start, query_start, state_change - отметки времени указывающие когда был запущен процесс, транзакция, запрос внутри транзакции, и когда последний раз было изменено состояние процесса.
+state, waiting - состояние процесса и флаг говорящий о том находится ли процесс в ожидании другого процесса.
+backend_xid, backend_xmin - идентификатор запущенной транзакции, и идентификатор транзакции определяющий так называемый горизонт видимости транзакции.
+query - текст запроса который был выполнен последним в рамках этого подключения.
+
+Здесь достаточно атрибутов для описания клиентских подключений. Они практически все будут нужны за исключением таких атрибутов как application_name, backend_xid, backend_xmin.
+
+Итак, если каждая строка определяет одно подключение, можно легко узнать сколько всего сейчас подключений к базе.
+
+# select count(*) as total_conns from pg_stat_activity ;
+ total_conns 
+-------------
+          61
+
+Дальше мы можем использовать ключеое слово WHERE и определять параметры фильтрации. Например мы можем посмотреть сколько у нас подключений с узла 10.0.20.26.
+
+# select count(*) from pg_stat_activity where client_addr = '10.0.20.26';
+ count 
+-------
+    10
+
+Конечно же мы можем использовать разные условия и выполнять фильтрацию по другим полям, в том числе и сочетать условия с помощью AND и OR.
+Очень важными атрибутами являются время старта транзакции и время старта запроса. Используя текущее время мы можем вычислить продолжительность транзакции или запроса. Это очень полезно для выявления длинных транзакций
+
+# select 
+  client_addr, usename, datname,
+  clock_timestamp() - xact_start as xact_age,
+  clock_timestamp() - query_start as query_age,
+  state, query
+from pg_stat_activity 
+order by coalesce(xact_start,query_start);
+-[ RECORD 1 ]-------------------------------------------------------
+client_addr | 10.0.20.26
+usename     | james
+datname     | sales_db
+xact_age    | 
+query_age   | 12 days 05:52:09.181345
+state       | idle
+query       | <query text>
+
+Из вывода следует, что у нас есть запрос чей возраст 12 дней. Учитывая что xact_age пустой то это не транзакция. Определить что он не выполняется в данный момент нам помогает поле state. Похоже на то что james в пятницу выполнил запрос и ушел в отпуск на две недели не отключившись от базы.
+В этом примере мы также использовали поле state. Остановимся на этом подробнее. Поле state определяет текущее статус подключения и может принимать одно из нескольких состояний:
+active - это рабочее состояние процесса и означает что процесс выполняет запрос, то есть делает полезную работу.
+idle - это холостой ход, никакой полезной работы не делается.
+idle in transaction - это холостой ход внутри открытой транзакции. Это означает что приложение открыло транзакцию и ничего в ней не делает. Долгие процессы (больше одного часа) с таким статусом вредны для базы данных и их следует завершать, а причины такого поведения в приложении устранять.
+idle in transaction (aborted) - это сломаная транзакция, когда внутри нее один из запросов завершился ошибкой, все последующие запросы будут проигнорированы.
+fastpath function call - процесс выполняющий fast-path функцию.
+disabled - это состояние-заглушка, оно показывается только если отключен параметр track_activities.
+Итак? теперь когды мы имеем представление о состояниях подключений мы можем посмотреть суммарную активность в базе.
+
+# SELECT
+    client_addr, usename, datname, state, count(*)
+  FROM pg_stat_activity
+  GROUP BY 1,2,3,4 ORDER BY 5 DESC;
+ client_addr |  usename  |  datname  |        state        | count 
+-------------+-----------+-----------+---------------------+-------
+ 127.0.0.1   | app_user  | sales_db  | idle                |    28
+ 127.0.0.1   | app_user  | sales_db  | active              |    15
+ 127.0.0.1   | app_user  | sales_db  | idle in transaction |     3
+ 127.0.0.1   | bg_user   | sales_db  | active              |     6
+ 10.11.2.12  | james     | sales_db  | idle                |     2
+ 10.0.20.26  | helen     | shop_db   | active              |     1
+
+Тут можно отметить что у нас больше всего idle подключений. Если количество таких процессов у вас измерятся десятками или даже сотнями, то вам стоит подумать о внедрении pgbouncer, для снижения количества idle процессов. Также мы видим idle in transaction процессы, важно отслеживать их и если они слишком долго висят, принудительно завершать их работу с помощью pg_terminate_backend(). Мы уже знаем как смотреть возраст запроса или транзакции.
+
+# SELECT
+  client_addr, usename, datname,
+   clock_timestamp() - xact_start as xact_age,
+   clock_timestamp() - query_start as query_age,
+   state, query
+  FROM pg_stat_activity
+  WHERE state = 'idle in transaction'
+  ORDER BY coalesce(xact_start,query_start);
+-[ RECORD 1 ]-------------------------------------------------------
+client_addr | 127.0.0.1
+usename     | app_user
+datname     | sales_db
+xact_age    | 00:00:06.001629
+query_age   | 00:00:00.002542
+state       | idle in transaction
+query       | <query text>
+
+Как мы видим возраст транзакции относительно мал, поэтому мы можем фильтровать короткие запросы. Также можно отфильтровать idle подключения, потому что они не представляют интереса. Давайте отфильтруем все что выполняется меньше 10 секунд. 
+
+# SELECT
+    client_addr, usename, datname,
+    clock_timestamp() - xact_start as xact_age,
+    clock_timestamp() - query_start as query_age,
+    state, query
+  FROM pg_stat_activity
+  WHERE (
+  (clock_timestamp() - xact_start) > '00:00:10'::interval OR
+  (clock_timestamp() - query_start) > '00:00:10'::interval AND
+  state <> 'idle'
+ )
+  ORDER BY coalesce(xact_start,query_start);
+-[ RECORD 1 ]-------------------------------------------------------
+client_addr | 127.0.0.1
+usename     | app_user
+datname     | sales_db
+xact_age    | 00:00:22.025617
+query_age   | 00:00:14.120915
+state       | idle in transaction
+query       | <query text>
+
+Однако это не все, бывает ситуации когда выполнение запроса блокируется другим запросом или транзакцией. Для идентификации таких подключении используется атрибут waiting (true если заблокировано, false если блокировок нет).
+
+# SELECT
+    client_addr, usename, datname,
+    clock_timestamp() - xact_start as xact_age,
+    clock_timestamp() - query_start as query_age,
+    state, waiting, query
+  FROM pg_stat_activity
+  WHERE waiting
+  ORDER BY coalesce(xact_start,query_start);
+-[ RECORD 1 ]-------------------------------------------------------
+client_addr | 127.0.0.1
+usename     | app_user
+datname     | sales_db
+xact_age    | 00:00:16.736127
+query_age   | 00:00:02.839100
+state       | active
+waiting     | t
+query       | <query text>
+
+Процессы в состоянии waiting это плохо и являются признаком неправильно спроектированного приложения. Блокировка возникает в ситуации когда две и более параллельных транзакции (или запроса) пытаются получить доступ к одному ресурсу, например набору строк или таблице. Простой пример, транзакция A обновила набор строк M, транзакция B при попытке обновить тот же набор строк перейдет в ожидание до тех пор пока транзакция А не будет подтверждена или отменена.
+
+Кроме pg_stat_activity, такие ситуации можно отследить в журнале событий postgresql, при условии что включен параметр log_lock_waits.
+
+[UPDATE waiting] LOG:  process 29054 still waiting for ShareLock on transaction 2034635 after 1000.160 ms
+[UPDATE waiting] DETAIL:  Process holding the lock: 29030. Wait queue: 29054.
+[UPDATE waiting] CONTEXT:  while updating tuple (0,68) in relation "products"
+[UPDATE waiting] STATEMENT:  update products set price = 20 where id = 1;
+[UPDATE waiting] LOG:  process 29054 acquired ShareLock on transaction 2034635 after 9049.000 ms
+[UPDATE waiting] CONTEXT:  while updating tuple (0,68) in relation "products"
+[UPDATE waiting] STATEMENT:  update products set price = 20 where id = 1;
+
+Что здесь происходит?
+Процесс с PID 29054 заблокирован и находится в ожидании. Процесс с PID 29030 удерживает блокировку.
+Также приводится текст запроса который находится в ожидании.
+Через 9 секунд процесс с PID 29054 получил доступ к ресурсу и смог выполнить запрос.
+Кроме того возможны тупиковые ситуации (deadlock). Когда при попытке получения доступа все вовлеченные транзакции блокируются и не могут продолжать работу. Если возникла такая ситуация, постгрес принудительно завершает одну из транзакций чтобы разблокировать остальных участников конфликта. Таймаут после истечении которого фиксируется дедлок, по-умолчанию равен 1 секунде и может настраиваться через параметр deadlock_timeout. Такие ситуации также попадают в журнал событий.
+
+[UPDATE] ERROR:  deadlock detected
+[UPDATE] DETAIL:  Process 29054 waits for ShareLock on transaction 2034637; blocked by process 29030.
+        Process 29030 waits for ShareLock on transaction 2034638; blocked by process 29054.
+        Process 29054: update products set price = 20 where id = 1;
+        Process 29030: update products set price = 20 where id = 2;
+[UPDATE] HINT:  See server log for query details.
+[UPDATE] CONTEXT:  while updating tuple (0,68) in relation "products"
+[UPDATE] STATEMENT:  update products set price = 20 where id = 1;
+[UPDATE waiting] LOG:  process 29030 acquired ShareLock on transaction 2034638 after 2924.914 ms
+[UPDATE waiting] CONTEXT:  while updating tuple (0,69) in relation "products"
+[UPDATE waiting] STATEMENT:  update products set price = 20 where id = 2;
+
+Что тут произошло?
+Процесс с PID 29054 перешел в ожидание так как был заблокирован процессом с PID 29030.
+В свою очередь процесс с PID 29030 также перешел в ожидание так как был заблокирован процессом с PID 29054.
+Дальше мы видим запросы из-за которых возник дедлок
+Процесс 29030 был разблокирован, следовательно запрос внутри процесса 29054 был принудительно отменен, а транакция перешла в "idle in transaction (aborted)" состояние.
+В любом случае, процессы находящиеся в ожидании и дедлоки это плохо и такие инциденты нужно расследовать и устранять. Может быть кто-то спросит: Почему это плохо? Я отвечу, пока процесс находится в ожидании, приложение которое отправило запрос, также находится в ожидании, в результате конечный пользователь может подумать что система тормозит и будет зол. Тормозные системы никто не любит.
+
+Подводя итог, теперь когда вы знаете как эффективно использовать pg_stat_activity, вы можете сами составить свое представление которое будет для вас первым помощником когда что-то в базе вышло из под контроля. Вот один из примеров представления для просмотра ненормальной активности в базе.
+
+CREATE VIEW db_activity AS 
+SELECT 
+    pg_stat_activity.pid,
+    pg_stat_activity.client_addr,
+    pg_stat_activity.client_port,
+    pg_stat_activity.datname,
+    pg_stat_activity.usename,
+    clock_timestamp() - pg_stat_activity.xact_start AS ts_age,
+    clock_timestamp() - pg_stat_activity.query_start AS query_age,
+    clock_timestamp() - pg_stat_activity.state_change AS change_age,
+    pg_stat_activity.waiting,
+    pg_stat_activity.state,
+    pg_stat_activity.query
+FROM pg_stat_activity
+WHERE ((clock_timestamp() - pg_stat_activity.xact_start) > '00:00:00.1'::interval OR (clock_timestamp() - pg_stat_activity.query_start) > '00:00:00.1'::interval AND pg_stat_activity.state IN ('idle in transaction (aborted)', 'idle in transacaction')) AND pg_stat_activity.pid <> pg_backend_pid()
+ORDER BY COALESCE(pg_stat_activity.xact_start, pg_stat_activity.query_start);
