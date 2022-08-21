@@ -1,0 +1,36 @@
+# adduser postgres sudo
+sudo apt-get install pgbouncer
+По умолчанию прокси слушает порт 6432. Логи можно почитать так:  less /var/log/postgresql/pgbouncer.log
+Конфигурационный файл называется /etc/pgbouncer/pgbouncer.ini  
+* = host=localhost port=5432
+pool_mode = transaction
+max_client_conn = 1000
+auth_type = md5
+auth_file = /etc/pgbouncer/userlist.txt
+admin_users = bouncer
+
+CREATE ROLE bouncer PASSWORD 'wzx6%4inm' SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN;
+
+echo "md5"$(echo -n 'wzx6%4inmbouncer' | md5sum | awk '{print $1}')
+echo -n "md5"; echo -n "wzx6%4inmbouncer" | md5sum | awk '{print $1}'
+
+'scram-sha-256'
+
+md53743aeb33de69409a475fd5fa58641c0
+md53743aeb33de69409a475fd5fa58641c0
+
+echo -n 'wzx6%4inmbouncer' | scram-sha-256
+3743aeb33de69409a475fd5fa58641c0  -
+
+
+в файл пароле /etc/pgbouncer/userlist.txt
+"bouncer" "md53743aeb33de69409a475fd5fa58641c0"
+
+"bouncer" "SCRAM-SHA-256$4096:4cbrsQ62MK0dhSkcA2feBA==$D5e/cIPVmhieKi0qfwgNMRkNDptAhZk6i+Fm/ncdFyY=:BcG4g0XrLyPrUMEunUbbTILgrSEfQKUi32zwxPSpfBg="
+           SCRAM-SHA-256$4096:4cbrsQ62MK0dhSkcA2feBA==$D5e/cIPVmhieKi0qfwgNMRkNDptAhZk6i+Fm/ncdFyY=:BcG4g0XrLyPrUMEunUbbTILgrSEfQKUi32zwxPSpfBg=
+           
+ "identity" "SCRAM-SHA-256$4096:3npSGDNl9Nd7+FrezY/EPw==$QbJUOmpBsbaDVzgCUaROLWGpXV+ttPVXOU9uABgP/10=:aCyWMK8Bt67+BoYc6S1W6cbyjjVX67tJGQMiLczc5to="
+ "challenge" "SCRAM-SHA-256$4096:KXo9L8VtPxpRouw5H6wEVg==$dUR3horI099x9KN9arUpTXJjzPADvbO3VjKrFxzvNGA=:byPCyLjY+QULRyPNyPqJhGYud9nVP5/IEPKn+kQOjM8="
+ "challengecommentdb" "SCRAM-SHA-256$4096:uF4gewBrRFX3vN3zsrGmxw==$w1raajhTV/AlZdKZhW/LNBykG8Ox2sb1Y3dOGTT5k0M=:DSXWSxI1aqLYSkS7nFbK97LC4AQc+CSJM5DsQt70qu4="
+ "notificationdb" "SCRAM-SHA-256$4096:OOEGv+nuu0eyHrrLN9rYHA==$Ran3uiSOPwSqZNSVZ49bogqh+Oh3aoJk5ljuq7W9H5c=:srnjoZ8YV4Zf7ysiTn5aVpNqHexvJrNDqcJ89h6b53I="
+ "bouncer" "SCRAM-SHA-256$4096:4cbrsQ62MK0dhSkcA2feBA==$D5e/cIPVmhieKi0qfwgNMRkNDptAhZk6i+Fm/ncdFyY=:BcG4g0XrLyPrUMEunUbbTILgrSEfQKUi32zwxPSpfBg="
