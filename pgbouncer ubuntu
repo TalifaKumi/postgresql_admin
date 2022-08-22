@@ -25,7 +25,11 @@ echo -n 'wzx6%4inmbouncer' | scram-sha-256
 
 в файл пароле /etc/pgbouncer/userlist.txt
 "bouncer" "md53743aeb33de69409a475fd5fa58641c0"
+psql -p 6432 -U bouncer pgbouncer
 
+
+
+============================  Не работает
 "bouncer" "SCRAM-SHA-256$4096:4cbrsQ62MK0dhSkcA2feBA==$D5e/cIPVmhieKi0qfwgNMRkNDptAhZk6i+Fm/ncdFyY=:BcG4g0XrLyPrUMEunUbbTILgrSEfQKUi32zwxPSpfBg="
            SCRAM-SHA-256$4096:4cbrsQ62MK0dhSkcA2feBA==$D5e/cIPVmhieKi0qfwgNMRkNDptAhZk6i+Fm/ncdFyY=:BcG4g0XrLyPrUMEunUbbTILgrSEfQKUi32zwxPSpfBg=
            
