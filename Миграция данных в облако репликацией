@@ -15,13 +15,20 @@ SSL=ON
 wal_level=logical 
 Теперь настройте аутентификацию хостов в источнике: внесите хосты кластера в облаке в файл pg_hba.conf (в Debian и Ubuntu путь к нему по умолчанию — /etc/postgresql/10/main/pg_hba.conf). Добавьте в файл строки, которые разрешат входящие соединения к БД с указанных хостов.
 Если вы используете SSL:
+hostssl    all            all             <адрес хоста>      md5
+hostssl    replication    all             <адрес хоста>      md5   
+
 Если вы не используете SSL:
+host    all            all             <адрес хоста>      md5
+host    replication    all             <адрес хоста>      md5 
+
 Если на сервере-источнике работает фаервол, разрешите входящие соединения с хостов кластера Managed Service for PostgreSQL. Например, для Ubuntu 18:
 sudo ufw allow from <адрес хоста> to any port 5432 
 Перезагрузите сервер БД, чтобы применить настройки:
 sudo systemctl restart postgresql 
 После перезапуска проверьте статус PostgreSQL с помощью команды:
 sudo systemctl status postgresql 
+
 2. Экспорт схемы БД из источника
 С помощью утилиты pg_dump создайте файл со схемой БД, которую нужно применить в кластере Managed Service for PostgreSQL.
  
@@ -34,6 +41,7 @@ pg_dump -h <адрес сервера СУБД> \
     -d <имя базы данных> -Fd -f /tmp/db_dump
  
 В этой команде при экспорте исключаются все данные, которые связаны с привилегиями и ролями. Это необходимо, чтобы не возникало конфликтов с настройками БД в Yandex Cloud. Если базе нужны дополнительные пользователи, создайте их.
+
 3. Создание кластера Managed Service for PostgreSQL и восстановление схемы БД
 Если у вас ещё нет PostgreSQL-кластера в Yandex Cloud, создайте его. При создании кластера укажите то же имя БД, что и на сервере-источнике.
 Восстановите схему в созданном кластере:
@@ -52,10 +60,17 @@ pg_restore -Fd -v --single-transaction -s --no-privileges \
 CREATE PUBLICATION p_data_migration FOR ALL TABLES; 
 На хосте кластера Managed Service for PostgreSQL создайте подписку со строкой подключения к публикации. Подробности о создании подписок смотрите в документации PostgreSQL (раздел Create subscription).
 Запрос с включённым SSL:
+ 
+CREATE SUBSCRIPTION s_data_migration CONNECTION 'host=<адрес сервера-источника> port=<порт> user=<имя пользователя> sslmode=verify-full dbname=<имя базы данных>' PUBLICATION p_data_migration;
+ 
 Без SSL:
+ 
+CREATE SUBSCRIPTION s_data_migration CONNECTION 'host=<адрес сервера-источника> port=<порт> user=<имя пользователя> sslmode=disable dbname=<имя базы данных>' PUBLICATION p_data_migration;
+ 
 Следите за статусом репликации через каталоги pg_subscription_rel. Общий статус репликации на приёмнике можно получить через pg_stat_subscription, на источнике — через pg_stat_replication.
 select * from pg_subscription_rel; 
 Важно следить за статусом репликации на приёмнике по полю srsubstate. Значение r в поле srsubstate говорит о том, что синхронизация завершилась и базы готовы к репликации.
+
 5. Перенос PostgreSQL-sequences после репликации
 Чтобы завершить синхронизацию источника и приёмника, запретите запись данных на сервере-источнике и перенесите PostgreSQL-sequences в кластер Managed Service for PostgreSQL.
 Экспортируйте PostgreSQL-sequences из источника:
