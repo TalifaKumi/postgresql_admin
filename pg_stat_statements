@@ -1,0 +1,28 @@
+---------------------------------------------   долгие запросы
+SELECT  substring(query, 1, 50) AS query,
+round(total_exec_time::numeric, 2) AS total_time,
+calls,
+round(mean_plan_time::numeric, 2) AS mean,
+round((100 * total_exec_time /
+sum(total_exec_time::numeric) OVER ())::numeric, 2) AS percentage_cpu
+FROM    pg_stat_statements
+ORDER BY total_exec_time DESC
+LIMIT 10;
+
+-------------------------------------------- самые большие чтение - запись
+select userid::regrole, dbid, query,queryid,mean_plan_time/1000 as mean_time_seconds 
+    from pg_stat_statements
+    order by (blk_read_time+blk_write_time) desc
+    limit 10;
+    
+    ----------------------------- трудоемкие запросы
+    select userid::regrole, dbid, query ,calls, total_exec_time/1000 as total_time_seconds ,
+min_plan_time/1000 as min_time_seconds,max_plan_time/1000 as max_time_seconds,
+mean_plan_time/1000 as mean_time_seconds
+    from pg_stat_statements
+    order by mean_plan_time desc
+    limit 10;
+	
+  -------------------------------- заполняют буферный кеш
+  select userid::regrole, dbid, queryid,query  from pg_stat_statements 
+            order by (shared_blks_hit+shared_blks_dirtied) desc limit 10;
