@@ -1,0 +1,27 @@
+SELECT * FROM pgstattuple('table');
+SELECT * FROM pgstatindex('index');
+select * from pgstathashindex('hash_index');
+
+pg_statio_all_indexes
+
+SELECT pgstattuple('relname'),
+relname as "Table",
+pg_size_pretty(pg_total_relation_size(relid)) As "Size",
+pg_size_pretty(pg_total_relation_size(relid) - pg_relation_size(relid)) as "External Size"
+FROM pg_catalog.pg_statio_user_tables ORDER BY pg_total_relation_size(relid) DESC;
+
+select format('SELECT * FROM pgstattuple(''%I'')',relname) FROM pg_catalog.pg_statio_user_tables \gexec
+
+====================================  table tuple
+WITH ts AS (
+    SELECT relname, pg_size_pretty(pg_table_size(relid)) as sz
+    FROM  pg_catalog.pg_statio_user_tables order by 2 desc
+)
+select format('SELECT * FROM pgstattuple(''%I'')',relname) FROM ts \gexec
+
+=====================================  index tuple
+WITH ts AS (
+    SELECT relname, pg_size_pretty(pg_indexes_size(relid)) as sz
+    FROM  pg_catalog.pg_statio_all_indexes order by 2 desc
+)
+select format('SELECT * FROM pgstattuple(''%I'')',relname) FROM ts \gexec
