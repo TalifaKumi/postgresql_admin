@@ -45,3 +45,24 @@ FROM (
 
 -------------------------------------------Размер столбца
 select pg_column_size('имя стобца') from 'имя таблицы'; 
+
+----------------------------------------------Отображаем 10 самых больших БД(подключаться к PostgreSQL надо без указания имени базы):
+SELECT d.datname AS Name, pg_catalog.pg_get_userbyid(d.datdba) AS Owner,
+CASE WHEN pg_catalog.has_database_privilege(d.datname, 'CONNECT')
+THEN pg_catalog.pg_size_pretty(pg_catalog.pg_database_size(d.datname))
+ELSE 'No Access'
+END AS SIZE
+FROM pg_catalog.pg_database d
+ORDER BY
+CASE WHEN pg_catalog.has_database_privilege(d.datname, 'CONNECT')
+THEN pg_catalog.pg_database_size(d.datname)
+ELSE NULL
+END DESC -- nulls first
+LIMIT 20
+
+------------------------------Отображаем размер таблиц в базе(подключаться к PostgreSQL надо указав имя базы):
+SELECT
+relname as "Table",
+pg_size_pretty(pg_total_relation_size(relid)) As "Size",
+pg_size_pretty(pg_total_relation_size(relid) - pg_relation_size(relid)) as "External Size"
+FROM pg_catalog.pg_statio_user_tables ORDER BY pg_total_relation_size(relid) DESC;
