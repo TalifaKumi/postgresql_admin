@@ -1,3 +1,39 @@
+
+ userid              | oid              |           |          |
+ dbid                | oid              |           |          |
+ queryid             | bigint           |           |          |
+ query               | text             |           |          |
+ plans               | bigint           |           |          |
+ total_plan_time    Возвращает общее время планирования в миллисекундах.
+ min_plan_time      Возвращает min время  планирования запроса в миллисекундах  
+ max_plan_time      Возвращает max время  планирования запроса в миллисекундах  
+ mean_plan_time     Возвращает среднее время  планирования запроса в миллисекундах          
+ stddev_plan_time    Стандартное отклонение времени, затраченного на планирование этого оператора в миллисекундах
+ calls		    число выполнений
+ total_exec_time     Возвращает общее время выполнения запроса в миллисекундах.
+ min_exec_time       Возвращает min время выполнения запроса в миллисекундах
+ max_exec_time       Возвращает max время выполнения запроса в миллисекундах
+ mean_exec_time      Возвращает среднее время выполнения запроса в миллисекундах 
+ stddev_exec_time    Стандартное отклонение времени, затраченного на выполнение оператора, в миллисекундах
+ rows      суммарное количество вовзращенных строк
+ shared_blks_hit   количество страниц, которые были в кэше БД
+ shared_blks_read   количество страниц, которые были прочитаны с диска, чтобы выполнить запросы такого типа
+ shared_blks_dirtied  количество страниц, которые были изменены
+ shared_blks_written количество страниц, которые были записаны на диск
+ local_blks_hit     временные таблицы, количество страниц, которые были в кэше БД
+ local_blks_read     временные таблицы, количество страниц, которые были прочитаны с диска, чтобы выполнить запросы такого типа
+ local_blks_dirtied  временные таблицы, количество страниц, которые были изменены
+ local_blks_written  временные таблицы, количество страниц, которые были записаны на диск
+ temp_blks_read      временные файлы, сколько страниц временных данных было прочитано
+ temp_blks_written   временные файлы, сколько страниц временных данных было записано (используется при сортировке на диски, джойнах и других временных операциях)
+ blk_read_time       сколько времени суммарно заняло чтение с диска;
+ blk_write_time     сколько времени суммарно заняла запись на диск.
+ wal_records        Общее число записей WAL, сгенерированных при выполнении оператора
+ wal_fpi            Общее число образов полных страниц в WAL, сгенерированных при выполнении оператора
+ wal_bytes          Общий объём WAL, сгенерированный при выполнении оператора, в байтах
+
+
+
 ---------------------------------------------   долгие запросы
 SELECT  substring(query, 1, 50) AS query,
 round(total_exec_time::numeric, 2) AS total_time,
@@ -10,17 +46,17 @@ ORDER BY total_exec_time DESC
 LIMIT 10;
 
 -------------------------------------------- самые большие чтение - запись
-select userid::regrole, dbid, query,queryid,mean_plan_time/1000 as mean_time_seconds 
+select userid::regrole, dbid, query,queryid,mean_exec_time/1000 as mean_time_seconds 
     from pg_stat_statements
     order by (blk_read_time+blk_write_time) desc
     limit 10;
     
     ----------------------------- трудоемкие запросы
     select userid::regrole, dbid, query ,calls, total_exec_time/1000 as total_time_seconds ,
-min_plan_time/1000 as min_time_seconds,max_plan_time/1000 as max_time_seconds,
-mean_plan_time/1000 as mean_time_seconds
+min_exec_time/1000 as min_time_seconds,max_exec_time/1000 as max_time_seconds,
+mean_exec_time/1000 as mean_time_seconds
     from pg_stat_statements
-    order by mean_plan_time desc
+    order by mean_exec_time desc
     limit 10;
 	
   -------------------------------- заполняют буферный кеш
