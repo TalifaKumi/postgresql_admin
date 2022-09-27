@@ -66,3 +66,13 @@ relname as "Table",
 pg_size_pretty(pg_total_relation_size(relid)) As "Size",
 pg_size_pretty(pg_total_relation_size(relid) - pg_relation_size(relid)) as "External Size"
 FROM pg_catalog.pg_statio_user_tables ORDER BY pg_total_relation_size(relid) DESC;
+
+---------------------------------------------------
+select pg_relation_size(20306, 'main') as main,
+  pg_relation_size(20306, 'fsm') as fsm,
+  pg_relation_size(20306, 'vm') as vm,
+  pg_relation_size(20306, 'init') as init,
+  pg_table_size(20306), pg_indexes_size(20306) as indexes,
+  pg_total_relation_size(20306) as total;
+
+
