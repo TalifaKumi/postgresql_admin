@@ -32,7 +32,17 @@
  wal_fpi            Общее число образов полных страниц в WAL, сгенерированных при выполнении оператора
  wal_bytes          Общий объём WAL, сгенерированный при выполнении оператора, в байтах
 
+===================================== Cреднее время запроса в милисекундах 
 
+select  substring(query, 1, 50) AS query, (sum(total_exec_time) / sum(calls))::numeric(16,3) total_exec_time 
+from pg_stat_statements group by  substring(query, 1, 50)
+order by total_exec_time  desc;
+
+
+===================================== Самые активно пишущие (в shared_buffers) запросы
+select  substring(query, 1, 50) AS query, max(shared_blks_dirtied)   shared_blks_dirtied
+from pg_stat_statements  group by  substring(query, 1, 50)
+order by shared_blks_dirtied  desc;
 
 ---------------------------------------------   долгие запросы
 SELECT  substring(query, 1, 50) AS query,
