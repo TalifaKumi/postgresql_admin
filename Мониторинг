@@ -1,0 +1,59 @@
+=============================   активность postgresql, возвращает число не 0 
+select count(backend_start) from pg_stat_activity where state='active'  and pid = pg_backend_pid();
+
+============================= самый старый висящий пользовательский коннект возвращает дату-время не старше now() - 10 мин
+SELECT min(xact_start) FROM pg_stat_activity WHERE state = 'idle in transaction' AND xact_start < NOW() - INTERVAL '10 minutes';
+select min(xact_start) from pg_stat_activity where state in ('idle in transaction', 'idle in transaction (aborted)';
+
+============================= блокировки должно возвращать число не больше 0
+select count(granted) from pg_locks where granted='f';
+
+============================  процент попалание в кеш, hit_ratio должно возвращать не мешьше 95 %
+select sum(blks_hit)*100/sum(blks_hit+blks_read) as hit_ratio from pg_stat_database;
+select (xact_commit*100)/(xact_commit+xact_rollback) as c_ratio from pg_stat_database where datname='postgres';
+
+============================  процент подтвержденных должно возвращать больше 95
+select (xact_commit*100)/(xact_commit+xact_rollback) as c_ratio from pg_stat_database where datname='postgres';
+
+============================ deadlocks   взаимные блокировки должно возвращать 0
+select deadlocks  from pg_stat_database where datname='postgres';
+
+============================ conflicts  отмененные запросы должно возвращать 0
+select conflicts from pg_stat_database where datname='postgres';
+
+========================================== средний размер темпов должно возвращать 1
+select temp_bytes/GREATEST(temp_files,1)  from pg_stat_database where datname='postgres';
+
+========================================== число темпов должно возвращать не больше 100
+select temp_files   from pg_stat_database where datname='postgres';
+
+========================================  процент незапланированных чекпоинтов должно возвращать не больше 10 %
+ select ((checkpoints_req+checkpoints_timed)*100)/checkpoints_timed from pg_stat_bgwriter ;
+
+======================================== background writer не справляется , должен быть 0
+select maxwritten_clean from pg_stat_bgwriter;
+
+======================================== сколько раз backend выполнил fsync (вместо checkpoint) , должен быть 0
+select buffers_backend_fsync from pg_stat_bgwriter;
+
+========================================  сканирование всех и результативных строк, должно быть округленно 1 
+select seq_scan / GREATEST(seq_tup_read,1) from pg_stat_user_tables; 
+
+======================================= HOT обновления попадания обновления - должно быть больше 90 
+select sum(coalesce(n_tup_hot_upd,0)::float * 100 / (case when n_tup_upd > 0 then n_tup_upd else 1 end)::float)::numeric(10,2) 
+from pg_stat_all_tables s join pg_class c ON c.oid=relid;
+
+======================================= вакуум первый запрос не больще 10 должен быть, второй должен быть меньше 3
+select  max(n_dead_tup*100 / n_live_tup) from pg_stat_user_tables;  
+
+select count(*) as av_thresh
+from pg_stat_user_tables s 
+join pg_class c ON s.relname = c.relname
+where s.n_dead_tup > (current_setting('autovacuum_vacuum_threshold')::int + (current_setting('autovacuum_vacuum_scale_factor')::float * c.reltuples));
+
+====================================  неиспользуемые индексы  , должно возвращать 0
+select count(*) from pg_stat_user_indexes where idx_scan=0;
+
+====================================  долгие запросы
+
+select max(clock_timestamp() - query_start) as query_age from pg_stat_activity;
