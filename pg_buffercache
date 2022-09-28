@@ -1,0 +1,51 @@
+
+bufferid		integer	 	ID, 			в диапазоне 1..shared_buffers
+relfilenode		oid		pg_class.relfilenode	Номер файлового узла для отношения
+reltablespace		oid		pg_tablespace.oid	OID табличного пространства, содержащего отношение
+reldatabase		oid		pg_database.oid		OID базы данных, содержащей отношение
+relforknumber		smallint	Номер слоя в отношении; см. include/common/relpath.h
+relblocknumber		bigint	 	Номер страницы в отношении
+isdirty			boolean	 	Страница загрязнена?
+usagecount		smallint	Cчётчик обращений по часовой стрелке
+pinning_backends	integer	 	Число обслуживающих процессов, закрепивших этот буфер
+
+--------------------------------------- буфера, страницы
+SELECT bufferid,  relfilenode,
+  CASE relforknumber
+    WHEN 0 THEN 'main'
+    WHEN 1 THEN 'fsm'
+    WHEN 2 THEN 'vm'
+  END relfork,
+  relblocknumber,  isdirty,  usagecount,  pinning_backends
+FROM pg_buffercache
+WHERE relfilenode = pg_relation_filenode('table'::regclass);
+
+SELECT count(*),
+  CASE relforknumber
+    WHEN 0 THEN 'main'
+    WHEN 1 THEN 'fsm'
+    WHEN 2 THEN 'vm'
+  END relfork
+FROM pg_buffercache
+WHERE relfilenode = pg_relation_filenode('t'::regclass) group by relfork;
+
+-----------------------------------------  распределение буферов по степени их использования
+SELECT usagecount, count(*)
+FROM pg_buffercache
+GROUP BY usagecount
+ORDER BY usagecount;
+-----------------------------------------   какая доля каких таблиц в нашей базе закеширована и насколько активно используются эти данные 
+------------------------------------------  (под активным использованием в этом запросе понимаются буферы со счетчиком использования больше 3)
+SELECT c.relname,
+  count(*) blocks,
+  round( 100.0 * 8192 * count(*) / pg_table_size(c.oid) ) "% of rel",
+  round( 100.0 * 8192 * count(*) FILTER (WHERE b.usagecount > 3) / pg_table_size(c.oid) ) "% hot"
+FROM pg_buffercache b
+  JOIN pg_class c ON pg_relation_filenode(c.oid) = b.relfilenode
+WHERE  b.reldatabase IN (
+         0, (SELECT oid FROM pg_database WHERE datname = current_database())
+       )
+AND    b.usagecount is not null
+GROUP BY c.relname, c.oid
+ORDER BY 2 DESC
+LIMIT 10;
