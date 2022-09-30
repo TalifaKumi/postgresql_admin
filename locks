@@ -1,3 +1,5 @@
+https://wiki.postgresql.org/wiki/Lock_dependency_information
+
 =================================== Просмотр блокировок определенной таблицы:
 SELECT * FROM pg_locks WHERE relation = 'table'::regclass;
 
