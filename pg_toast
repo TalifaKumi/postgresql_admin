@@ -1,0 +1,34 @@
+====================================================  какой таблицы тост
+select n.nspname, c.relname 
+from pg_class c 
+inner join pg_namespace n on c.relnamespace = n.oid
+where reltoastrelid = (
+    select oid
+    from pg_class 
+    where relname = 'pg_toast_1247' 
+    and relnamespace = (SELECT n2.oid FROM pg_namespace n2 WHERE n2.nspname = 'pg_toast') )
+    
+    
+select distinct n.nspname, c.relname 
+from pg_class c 
+inner join pg_namespace n on c.relnamespace = n.oid
+where reltoastrelid in (
+    select oid
+    from pg_class 
+    where relname in ( select relname  from pg_stat_all_indexes where schemaname like '%toast%') 
+    and relnamespace = (SELECT n2.oid FROM pg_namespace n2 WHERE n2.nspname = 'pg_toast') )
+    and n.nspname not in ('information_schema','pg_catalog');
+    
+    select relname from pg_class where oid = (select reltoastrelid from pg_class where relname='AspNetRoles');
+    
+
+    
+    ==============================  какое поле тостится
+    
+    select
+ t1.oid, t1.relname, t1.relkind, t2.relkind, t2.relpages, t2.reltuples
+from pg_class t1
+inner join pg_class t2
+on t1.reltoastrelid = t2.oid
+where t1.relkind = 'r'
+  and t2.relkind = 't';
