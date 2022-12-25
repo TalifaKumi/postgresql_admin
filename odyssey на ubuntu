@@ -1,1 +1,72 @@
+====================  надо
+cmake >= 3.12.4
+gcc >= 4.6
+openssl
+postgresql-server-dev-13
+pg_config utility is in the PATH
+=========================  проверяем - ставим сmake 
+cmake --version
+cmake version 3.25.1
+
+dpkg --get-selections | grep cmake 
+нет
+apt purge --auto-remove cmake   или    apt remove --purge --auto-remove cmake
+sudo apt update && \
+sudo apt install -y software-properties-common lsb-release && \
+sudo apt clean all
+
+wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+sudo apt-add-repository "deb https://apt.kitware.com/ubuntu/ $(lsb_release -cs) main"
+
+sudo apt update
+sudo apt install kitware-archive-keyring
+sudo rm /etc/apt/trusted.gpg.d/kitware.gpg
+sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6AF7F09730B3F0A4
+
+sudo apt update
+sudo apt install cmake
+
+ cmake --version
+cmake version 3.25.1
+
+===========================  gcc
+
+gcc --version
+gcc (Ubuntu 9.4.0-1ubuntu1~20.04.1) 9.4.0
+
+dpkg --get-selections | grep gcc 
+
+=================================  openssl
+
+dpkg --get-selections | grep openssl 
+
+==========================   postgresql-server-dev-14
+
+dpkg --get-selections | grep postgresql-server-dev-14
+
+apt -y install postgresql-server-dev-14
+apt -y install cmake3 pam-devel
+
+============================================  odyssey
+
+git clone https://github.com/yandex/odyssey.git
+
+cd odyssey
+make local_build
+make local_run
+make console_run
+make start-dev-env
+
+===========================================  Создание пользователя и вспомогательных каталогов:
+
+groupadd --system odyssey
+useradd --system --shell /sbin/nologin --gid odyssey --home-dir /var/lib/odyssey --no-create-home odyssey
+mkdir /run/odyssey
+chown -R odyssey:odyssey /run/odyssey
+echo "d /run/odyssey 0755 odyssey odyssey - -" > /usr/lib/tmpfiles.d/odyssey.conf
+mkdir /var/lib/odyssey
+chown -R odyssey:odyssey /var/lib/odyssey
+touch /var/log/odyssey.log
+chown odyssey:odyssey /var/log/odyssey.log
+mkdir /etc/odyssey
 
