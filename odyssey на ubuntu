@@ -70,3 +70,28 @@ touch /var/log/odyssey.log
 chown odyssey:odyssey /var/log/odyssey.log
 mkdir /etc/odyssey
 
+=========================================  Копирование бинарника, unit-файла для systemd и базовая настройка Odyssey:
+
+cd ~
+cd odyssey
+cp build/sources/odyssey /usr/bin
+chmod a+x /usr/bin/odyssey
+chown root:root /usr/bin/odyssey
+cat odyssey.conf | sed \
+-e '/^# pid_file.*/a \\pid_file \"/var/run/odyssey/odyssey.pid\"' \
+-e 's|^unix_socket_dir.*|unix_socket_dir \"/var/run/odyssey\"|g' \
+-e 's|^locks_dir.*|locks_dir \"/var/run/odyssey\"|g' \
+> /etc/odyssey/odyssey.conf
+chmod 644 /etc/odyssey/odyssey.conf
+cp scripts/systemd/odyssey.service /usr/lib/systemd/system
+systemctl daemon-reload
+systemctl enable odyssey
+=======================================   Запуск Odyssey:
+
+systemctl stop odyssey
+systemctl start odyssey
+
+systemctl restart odyssey
+systemctl status odyssey
+
+tail -f /var/log/odyssey.log
