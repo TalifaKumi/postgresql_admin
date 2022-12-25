@@ -95,3 +95,9 @@ systemctl restart odyssey
 systemctl status odyssey
 
 tail -f /var/log/odyssey.log
+
+==================================== если  bind to '[::]:6432' failed: Address already in use
+
+ps -ef | grep [o]dyssey
+
+
