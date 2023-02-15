@@ -1,0 +1,104 @@
+В дополнение к статье «Кластер PostgreSQL» для катастрофоустойчивости можно использовать отделённый географически Standby кластер PostgreSQL, 
+который обеспечивает высокий уровень доступности и аварийного восстановления. 
+Standby кластер PostgreSQL содержит только резервные узлы, реплицирующиеся с какого-либо удалённого мастера https://patroni.readthedocs.io/en/latest/replica_bootstrap.html#standby-cluster. 
+
+Этот тип кластеров имеет:
+
+- резервный лидер, который ведёт себя почти так же, как обычный лидер кластера, за исключением того, что он реплицируется с удалённого мастера;
+- каскадные реплики, которые реплицируются из резервного лидера.
+
+Шаг 1: Настройка PostgreSQL
+На всех серверах баз данных добавьте в конфигурационный файл pg_hba.conf информацию о всех узлах каждого кластера, чтобы разрешить соединения с разных серверов:
+#Patroni
+host all all 0.0.0.0/0 md5
+#Cluster hosts 1
+host replication replicator 192.168.1.1/32 md5
+host replication replicator 192.168.1.2/32 md5
+host replication replicator 192.168.1.3/32 md5
+#Standby сluster hosts 2
+host replication replicator 192.168.2.1/32 md5
+host replication replicator 192.168.2.2/32 md5
+host replication replicator 192.168.2.3/32 md5
+
+Перезапустите PostgreSQL на всех узлах:
+systemctl restart postgresql
+
+Шаг 2: Настройка Patroni
+На серверах Standby кластера в конфигурационном файле /etc/patroni/config.yml поменяйте значения scope, name, которые не должны совпадать с основным кластером. Замените адреса всех серверов:
+scope: postgres-cluster2 #  одинаковое значение на всех узлах Standby кластера
+name: postgresql-server4 # разное значение на всех узлах Standby кластера
+
+Добавьте раздел standby_cluster в секцию bootstrap, dcs в текущий конфигурационный файл /etc/patroni/config.yml и укажите удалённого мастера, который в данном примере определяется через haproxy:
+bootstrap:
+dcs:
+  standby_cluster:
+      host: haproxy-server.your_domain
+      port: 5000
+      create_replica_methods:
+      - basebackup
+
+На основном и Standby кластере добавьте адреса всех серверов, используемых в кластерах в раздел pg_hba в текущий конфигурационный файл /etc/patroni/config.yml:
+pg_hba:
+- host all all 0.0.0.0/0 md5
+- host replication replicator localhost trust
+#Cluster hosts 1
+- host replication replicator 192.168.1.1/32 md5
+- host replication replicator 192.168.1.2/32 md5
+- host replication replicator 192.168.1.3/32 md5
+#Cluster hosts 2
+- host replication replicator 192.168.2.1/32 md5
+- host replication replicator 192.168.2.2/32 md5
+- host replication replicator 192.168.2.3/32 md5
+
+Запустите службу Patroni:
+sudo systemctl enable --now patroni.service
+
+Если ранее служба Patroni была запущена на Standby кластере, то на каждом узле Standby кластера остановите службу Patroni. Удалите каталог данных postgresql, очистите информацию о кластере и повторно запустите службу Patroni:
+
+sudo systemctl stop patroni
+sudo rm -rf /var/lib/postgresql/10/main
+sudo etcdctl rm --recursive /service/postgres-cluster2
+sudo systemctl restart patroni
+
+Проверьте состояние Standby кластера:
+patronictl -c /etc/patroni/config.yml list
+
+Идентификатор кластера должен совпадать с основным кластером, роль у лидера должна быть Standby Leader.
+
+В случае недоступности основного кластера для смены режима Standby кластера на основной удалите раздел standby_cluster из текущей конфигурации patroni с помощью команды:
+patronictl edit-config --force -s standby_cluster.host='' -s standby_cluster.port='' -s standby_cluster.create_replica_methods=''
+
+Важно не допустить работы двух мастеров, в момент восстановления вышедшего ранее основного кластера он также останется мастером.
+
+После восстановления вышедшего ранее основного кластера для смены режима с основного на Standby кластер добавьте раздел standby_cluster в текущую конфигурацию patroni с помощью команды:
+patronictl edit-config --force -s standby_cluster.host=haproxy-server.your_domain -s standby_cluster.port=5000 -s standby_cluster.create_replica_methods='- basebackup'
+
+Шаг 3: Конфигурация HAproxy (блок postgres)
+Дополните конфигурацию HAproxy блока postgres указав адреса всех серверов, используемых в кластерах:
+
+listen postgres_master
+    bind haproxy-server.your_domain:5000
+    option tcplog
+    option httpchk OPTIONS /master
+    http-check expect status 200
+    default-server inter 3s fastinter 1s fall 3 rise 4 on-marked-down shutdown-sessions
+    server postgres-server1 postgres-server1.your_domain:5432 check port 8008
+    server postgres-server2 postgres-server2.your_domain:5432 check port 8008
+    server postgres-server3 postgres-server3.your_domain:5432 check port 8008
+    server postgres-server4 postgres-server4.your_domain:5432 check port 8008
+    server postgres-server5 postgres-server5.your_domain:5432 check port 8008
+    server postgres-server6 postgres-server6.your_domain:5432 check port 8008
+
+listen postgres_replicas
+    bind haproxy-server.your_domain:5001
+    option tcplog
+    option httpchk OPTIONS /replica
+    balance roundrobin
+    http-check expect status 200
+    default-server inter 3s fastinter 1s fall 3 rise 2 on-marked-down shutdown-sessions
+    server postgres-server1 postgres-server1.your_domain:5432 check port 8008
+    server postgres-server2 postgres-server2.your_domain:5432 check port 8008
+    server postgres-server3 postgres-server3.your_domain:5432 check port 8008
+    server postgres-server4 postgres-server4.your_domain:5432 check port 8008
+    server postgres-server5 postgres-server5.your_domain:5432 check port 8008
+    server postgres-server6 postgres-server6.your_domain:5432 check port 8008
