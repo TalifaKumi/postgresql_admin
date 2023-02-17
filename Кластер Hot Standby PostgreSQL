@@ -1,5 +1,6 @@
 Standby кластер PostgreSQL содержит только резервные узлы, реплицирующиеся с какого-либо удалённого мастера 
-https://patroni.readthedocs.io/en/latest/replica_bootstrap.html#standby-cluster. 
+https://patroni.readthedocs.io/en/latest/replica_bootstrap.html#standby-cluster
+https://elma365.com/ru/help/platform/configure-hot-standby-postgresql.html
 
 Этот тип кластеров имеет:
 
