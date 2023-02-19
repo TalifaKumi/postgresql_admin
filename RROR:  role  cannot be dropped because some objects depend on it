@@ -1,4 +1,7 @@
-select 'DROP user '||usename||';' from pg_user ;
+
+select 'REASSIGN OWNED BY "'||usename||'" TO postgres;' from pg_user  order by usename;
+select 'DROP OWNED BY "'||usename||'";' from pg_user  order by usename;
+select 'DROP user "'||usename||'";' from pg_user order by usename;
 
 postgres=# DROP user acc_data;
 ERROR:  role "acc_data" cannot be dropped because some objects depend on it
@@ -31,4 +34,4 @@ DROP USER acc_data;
 
 
 3. Another way: REVOKE all privileges in the privilege_type list
-postgres=# REVOKE TRUNCATE, REFERENCES, TRIGGER, FUNCTION ON ALL TABLES IN SCHEMA public FROM acc_data;
+postgres=# REVOKE TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public FROM acc_data;
