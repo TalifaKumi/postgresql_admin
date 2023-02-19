@@ -1,0 +1,34 @@
+select 'DROP user '||usename||';' from pg_user ;
+
+postgres=# DROP user acc_data;
+ERROR:  role "acc_data" cannot be dropped because some objects depend on it
+DETAIL:  privileges for function pg_stat_statements_reset()
+
+1. Before going to solution, list all privileges of a role (grantee)
+
+SELECT grantor, grantee, table_schema, table_name, privilege_type FROM information_schema.table_privileges WHERE grantee = 'acc_data';
+
+ grantor | grantee | table_schema | table_name | privilege_type 
+---------+---------+--------------+------------+----------------
+(0 rows)
+
+
+\ddp+                                                                                                                                                                                                                                                           
+             Default access privileges
+ Owner | Schema | Type | Access privileges 
+-------+--------+------+-------------------
+(0 rows)
+
+\df+ pg_stat_statements_reset
+acc_data=X/postgres                       +|          |                          | 
+        |                          |     
+                                                                                                                                                                                                                                                     
+2. Quick way to drop the user   on default database
+
+REASSIGN OWNED BY acc_data TO postgres;
+DROP OWNED BY acc_data;
+DROP USER acc_data;
+
+
+3. Another way: REVOKE all privileges in the privilege_type list
+postgres=# REVOKE TRUNCATE, REFERENCES, TRIGGER, FUNCTION ON ALL TABLES IN SCHEMA public FROM acc_data;
