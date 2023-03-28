@@ -1,0 +1,125 @@
+
+Файл конфигурации и описание параметров запуска
+Командная строка | Файл конфигурации | Описание
+ data-dir | ETCD_DATA_DIR | Укажите каталог хранения данных узла, включая идентификатор узла, идентификатор кластера, конфигурацию инициализации кластера, файл моментального снимка, если не указан - wal-dir, файлы WAL также будут сохранены;
+ wal-dir | ETCD_WAL_DIR | Укажите каталог хранения файла was на узле. Если этот параметр указан, файл wal будет храниться отдельно от других файлов данных.
+ name | ETCD_NAME | имя узла
+ исходные-рекламные-одноранговые-URL | ETCD_INITIAL_ADVERTISE_PEER_URLS | Сообщать другим узлам URL-адрес кластера
+ listen-peer-urls | ETCD_LISTEN_PEER_URLS | URL прослушивания, используемый для связи с другими узлами
+ Advertise-client-urls | ETCD_LISTEN_CLIENT_URLS | Сообщите URL-адрес клиента, который является URL-адресом службы
+ initial-cluster-token | ETCD_INITIAL_CLUSTER_TOKEN | ID кластера
+ initial-cluster | ETCD_INITIAL_CLUSTER | Все узлы в кластере
+Пример файла конфигурации
+more /etc/etcd/etcd.conf
+# [member]
+ETCD_NAME=lykops-etcd1
+ETCD_DATA_DIR="/var/lib/etcd/default.etcd"
+......
+ETCD_LISTEN_PEER_URLS="http://192.168.0.101:2380,http://localhost:2380"
+ETCD_LISTEN_CLIENT_URLS="http://192.168.0.101:2379,http://localhost:2379"
+......
+#[cluster]
+ETCD_INITIAL_ADVERTISE_PEER_URLS="http://192.168.0.101:2380"
+# if you use different ETCD_NAME (e.g. test), set ETCD_INITIAL_CLUSTER value for this name, i.e. "test=http://..."
+ETCD_INITIAL_CLUSTER="lykops-etcd1=http://192.168.0.101:2380,lykops-etcd2=http://192.168.0.102:2380,lykops-etcd3=http://192.168.0.103:2380"
+ # Если это автономная версия, прокомментируйте строку выше
+#ETCD_INITIAL_CLUSTER_STATE="new"
+#ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster"
+ETCD_ADVERTISE_CLIENT_URLS="http://192.168.0.101:2379"
+......
+#
+#[proxy]
+......
+#[security]
+ # Если требуется SSL-соединение etcd, включите следующую конфигурацию и измените путь к файлу. Подробнее см. Http://blog.csdn.net/liyingke112/article/details/77776491
+#ETCD_CERT_FILE="/etc/ssl/client.pem"
+#ETCD_KEY_FILE="/etc/ssl/client-key.pem"
+#ETCD_CLIENT_CERT_AUTH="true"
+#ETCD_TRUSTED_CA_FILE="/etc/ssl/ca.pem"
+#ETCD_AUTO_TLS="true"
+#ETCD_PEER_CERT_FILE="/etc/ssl/member.pem"
+#ETCD_PEER_KEY_FILE="/etc/ssl/member-key.pem"
+#ETCD_PEER_CLIENT_CERT_AUTH="false"
+#ETCD_PEER_TRUSTED_CA_FILE="/etc/ssl/ca.pem"
+#ETCD_PEER_AUTO_TLS="true"
+#
+#[logging]
+......
+запустить службу
+
+service etcd start
+systemctl enable etcd
+Кластерное обслуживание
+Просмотреть всех участников
+Способ 1. http://192.168.0.101:2379/v2/members
+ Метод 2, список участников etcdctl
+573789a076d6f1ab: name=lykops-etcd1 peerURLs=http://192.168.0.101:2380 clientURLs=http://192.168.0.101:2379 isLeader=false
+90ad624a2e4158cf: name=lykops-etcd2 peerURLs=http:/192.168.0.102:2380 clientURLs=http://192.168.0.102:2379 isLeader=false
+c9b8681eb46426ac: name=lykops-etcd3 peerURLs=http://192.168.0.103:2380 clientURLs=http://192.168.0.103:2379 isLeader=true
+Просмотр статуса кластера
+etcdctl cluster-health
+member 573789a076d6f1ab is healthy: got healthy result from http://192.168.0.101:2379
+member 90ad624a2e4158cf is healthy: got healthy result from http://192.168.0.102:2379
+member c9b8681eb46426ac is healthy: got healthy result from http://192.168.0.103:2379
+cluster is healthy
+Обновить узел
+Если вы хотите обновить IP-адрес (peerURLS) узла, сначала вам нужно узнать идентификатор этого узла. Вы можете перечислить все узлы и узнать идентификатор соответствующего узла.
+
+etcdctl member list
+В этом примере предположим, что вы хотите обновить peerURL узла с идентификатором 90ad624a2e4158cf как: http://192.168.0.105:2380
+
+etcdctl member update 90ad624a2e4158cf http://192.168.0.105:2380
+Updated member with ID 90ad624a2e4158cf in cluster
+Удалить узел
+Предположим, вы хотите удалить узел с идентификатором 90ad624a2e4158cf.
+
+etcdctl member remove 90ad624a2e4158cf
+Removed member 90ad624a2e4158cf from cluster
+После выполнения целевой узел автоматически остановит службу и напечатает строку журнала: etcd: этот член был окончательно удален из кластера. Выход. Если ведущий узел удален, это будет стоить Дополнительное время для переизбрания лидера.
+
+Добавить новый узел
+Чтобы добавить новый узел, нужно выполнить два шага:
+
+Зарегистрируйте новые узлы через etcdctl или соответствующий API
+ Запустите новый узел с соответствующими параметрами
+Давайте посмотрим на первый шаг, предполагая, что новый добавленный узел называется lykops-etcd6, а peerURLs - http://192.168.0.106:2380.
+
+etcdctl member add lykops-etcd6 http://192.168.0.106:2380
+added member 9bf1b35fc7761a23 to cluster
+ETCD_NAME="lykops-etcd6"
+ETCD_INITIAL_CLUSTER="lykops-etcd1=http://192.168.0.101:2380,lykops-etcd2=http://192.168.0.102:2380,lykops-etcd3=http://192.168.0.103:2380,lykops-etcd6=http://192.168.0.106:2380"
+ETCD_INITIAL_CLUSTER_STATE=existing
+На втором этапе измените файл конфигурации, замените вывод первого шага на /etc/etcd/etcd.conf, а затем запустите
+
+Таким образом, новый узел запустится и присоединится к существующему кластеру.
+
+Примечание: 1. После того, как узел не может быть удален, невозможно присоединиться к кластеру без изменения IP-адреса, и удаление данных не будет работать. 2. Наконец, измените / etc / etcd других существующих хостов. ETCD в /etcd.confINITIALИнформация о КЛАСТЕРЕ
+
+Резервные данные
+Используйте собственную команду etcd etcdctl для резервного копирования и т. д.
+
+etcdctl backup --data-dir /var/lib/etcd/default.etcd/ --backup-dir /backup/etcd
+восстановление
+Во время использования иногда происходит небольшое количество отказов хоста, и кластер необходимо обслуживать. Однако в действительности более половины узлов могут не работать нормально из-за серьезных сбоев оборудования или сети. Кластер etcd не может предоставлять обычные услуги, поэтому необходимы некоторые методы резервного копирования и восстановления данных.
+
+Сначала выберите обычный узел-член из оставшихся нормальных узлов и используйте команду etcdctl backup для резервного копирования данных etcd.
+
+etcdctl backup --data-dir /var/lib/etcd -backup-dir /tmp/etcd_backup
+tar -zcxf backup.etcd.tar.gz /tmp/etcd_backup
+Эта команда запишет все пользовательские данные на узле в указанный резервный каталог, но идентификатор узла, идентификатор кластера и другая информация будут потеряны и будут восстановлены при восстановлении целевого узла. , В основном это делается для предотвращения случайного повторного присоединения исходного узла к новому кластеру узлов и возникновения путаницы в данных.
+
+Затем восстановите данные Etcd на любом узле в новом кластере и запустите службу Etcd с параметром --force-new-cluster. Этот параметр сбрасывает идентификатор кластера и всю информацию о членах кластера.Адрес прослушивания узла будет сброшен на localhost: 2379, что означает, что в кластере только один узел.
+
+tar -zxvf backup.etcd.tar.gz -C /var/lib/etcd
+etcd --data-dir=/var/lib/etcd --force-new-cluster ...
+После запуска etcd одного узла вы можете сначала проверить целостность данных, а затем использовать Etcd API, чтобы изменить адрес прослушивания узла, чтобы он мог отслеживать внешний IP-адрес узла. Добавьте другие узлы для подготовки. Например:
+
+Используйте команду etcd, чтобы найти идентификатор текущего узла. Список участников etcdctl 98f0c6bf64240842: name = cd-2 peerURLs = http: //127.0.0.1: 2580 clientURLs = http: //127.0.0.1: 2579
+
+Поскольку etcdctl не имеет функции изменения параметров узла-члена, следующие операции должны выполняться с использованием API. curl http://127.0.0.1:2579/v2/members/98f0c6bf64240842 -XPUT -H "Content-Type: application / json" -d '{"peerURLs": ["http://127.0.0.1:2580"] }»
+
+Обратите внимание, что в Etcd рекомендуется сначала восстановить кластер во временный каталог, запустить etcd из временного каталога и после проверки правильности и полноты новых данных остановить etcd, а затем восстановить данные в Нормальный каталог.
+
+Наконец, после завершения запуска первого узла-члена, вы можете использовать команду etcdctl member add для добавления других узлов-членов в метод расширения кластера.
+
+
