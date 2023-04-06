@@ -67,17 +67,33 @@ create extension pg_stat_statements;
 С помощью него вы можете получить статистику по уже выполненным запросам.
 Например, мы можем получить запросы с максимальной загрузкой процессора такой командой:
 
+=============== версия 11
 SELECT substring(query, 1, 50) AS short_query, round(total_time::numeric, 2) AS
 total_time, calls, rows, round(total_time::numeric / calls, 2) AS avg_time, round((100 *
 total_time / sum(total_time::numeric) OVER ())::numeric, 2) AS percentage_cpu FROM
 pg_stat_statements ORDER BY total_time DESC LIMIT 20;
 
+=============== версия > 11
+SELECT substring(query, 1, 100) AS short_query, round(total_exec_time::numeric, 2) AS
+total_time, calls, rows, round(total_exec_time::numeric / calls, 2) AS avg_time, round((100 *
+total_exec_time / sum(total_exec_time::numeric) OVER ())::numeric, 2) AS percentage_cpu FROM
+pg_stat_statements ORDER BY total_exec_time DESC LIMIT 20;
+
+
 А максимально долгие запросы - вот такой:
 
+=============== версия 11
 SELECT substring(query, 1, 100) AS short_query, round(total_time::numeric, 2) AS
 total_time, calls, rows, round(total_time::numeric / calls, 2) AS avg_time, round((100 *
 total_time / sum(total_time::numeric) OVER ())::numeric, 2) AS percentage_cpu FROM
 pg_stat_statements ORDER BY avg_time DESC LIMIT 20;
+
+=============== версия > 11
+SELECT substring(query, 1, 100) AS short_query, round(total_exec_time::numeric, 2) AS
+total_time, calls, rows, round(total_exec_time::numeric / calls, 2) AS avg_time, round((100 *
+total_exec_time / sum(total_exec_time::numeric) OVER ())::numeric, 2) AS percentage_cpu FROM
+pg_stat_statements ORDER BY avg_time DESC LIMIT 20;
+
 
 Таким образом, мы можем понять, какие запросы сильно влияют на нагрузку нашей базы данных и оптимизировать их при необходимости.
 
