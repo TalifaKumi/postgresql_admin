@@ -11,3 +11,12 @@ SELECT pg_terminate_backend(procpid) FROM pg_stat_activity WHERE datname='curren
 ALTER DATABASE current_db RENAME TO old_db;
 ALTER DATABASE new_db RENAME TO current_db;
 
+
+1. Просмотреть список активных запросов и найти нужный:
+SELECT pid,query,usename,application_name FROM pg_stat_activity WHERE state = 'active';
+
+2. Вежливо попросить запрос завершиться:
+SELECT pg_cancel_backend(<pid of the process>)
+
+3. Убить зависший запрос:
+SELECT pg_terminate_backend(<pid of the process>)
