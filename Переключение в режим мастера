@@ -1,0 +1,50 @@
+Restore mongo. Run from mongo server
+scp mg13-bkp01.prod.pcbl.local:/data/backups-mirror/prod/mongodb/sp2-mng-db-201/latest.dat .
+mongorestore --authenticationDatabase admin --username edupower -d edupower --drop --archive=latest.dat
+# вбиваем пароль из волта mongodb_edupower_password
+
+/data/backups-mirror/prod/mongodb/sp2-mng-db-201/latest.dat  последняя копия (восстановление на время не поддерживается)
+
+
+
+Перенастроить репозиторий резервного копирования
+prod - поменять на geoprod
+
+postgres@mg13-bkp01:~$ grep repo-path /etc/pgbackrest.conf
+repo-path=/data/backups/geoprod/pgbackrest
+
+
+
+====================   останавливаем накат логов
+
+
+
+Для каждого кластера
+
+patronictl -c /etc/patroni/config.yml edit-config -s standby_cluster=null --force
+
+
+
+Исправление dblinks
+====================   на всех базах контура ГЕО запустить следующий sql
+
+
+
+SELECT  'ALTER SERVER ' || srvname || ' OPTIONS (SET hostaddr ''10.130.2.2''); '
+        || '-- ' || current_database()
+FROM pg_foreign_server
+ORDER BY srvname;
+\gexec
+
+
+
+Удаление слотов репликаци на проде
+pg_receivewal --username=replication --host=10.122.2.100 --port=54610 --verbose --slot=other_leg --drop-slot
+pg_receivewal --username=replication --host=10.122.2.100 --port=54440 --verbose --slot=other_leg --drop-slot
+pg_receivewal --username=replication --host=10.122.2.100 --port=54310 --verbose --slot=other_leg --drop-slot
+pg_receivewal --username=replication --host=10.122.2.100 --port=54370 --verbose --slot=other_leg --drop-slot
+pg_receivewal --username=replication --host=10.122.2.100 --port=54390 --verbose --slot=other_leg --drop-slot
+pg_receivewal --username=replication --host=10.122.2.100 --port=54540 --verbose --slot=other_leg --drop-slot
+pg_receivewal --username=replication --host=10.122.2.100 --port=54510 --verbose --slot=other_leg --drop-slot
+pg_receivewal --username=replication --host=10.122.2.100 --port=54620 --verbose --slot=other_leg --drop-slot
+
