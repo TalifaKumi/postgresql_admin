@@ -1,0 +1,116 @@
+sp2-praefect-db-201   10.122.2.222
+
+sp2-git-db-201     10.122.2.37
+
+ /etc/patroni/config.yml 
+wal_level = 'logical'
+max_worker_processes = 10   # one per database needed on provider node
+max_replication_slots = 10  # one per node needed on provider node
+max_wal_senders = 10        # one per node needed on provider node
+
+
+-------------  tests
+psql -d praefecthq_production -U postgres -h sp2-praefect-db-201 -p 5432
+
+psql -d praefecthq_production -U postgres -h sp2-git-db-201 -p 5432
+
+----------------  drop - create database
+
+SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE  pid <> pg_backend_pid() AND datname = 'praefecthq_production';
+Drop DATABASE praefecthq_production;
+CREATE DATABASE praefecthq_production
+
+    WITH
+
+    OWNER = praefecthq_production
+
+    ENCODING = 'UTF8'
+
+    LC_COLLATE = 'en_US.UTF-8'
+
+    LC_CTYPE = 'en_US.UTF-8'
+
+    TABLESPACE = pg_default
+
+    CONNECTION LIMIT = -1
+
+    IS_TEMPLATE = False;
+
+-----------------------sequence
+
+select 'alter sequence '||sequence_schema||'.'||sequence_name||' restart with '||maximum_value||';' FROM information_schema.sequences;
+
+select 'SELECT setval('''||sch||'.'||pk_seq||''', (SELECT MAX('||col||') FROM '||sch||'.'||tbl||'))' from ( select tc.table_schema sch, tc.table_name tbl, kcu.column_name col, pg_get_serial_sequence(tc.table_schema||'."'||tc.table_name||'"', kcu.column_name) as pk_seq from information_schema.table_constraints tc join information_schema.key_column_usage kcu on kcu.constraint_name = tc.constraint_name and kcu.table_schema = tc.table_schema where tc.constraint_type = 'PRIMARY KEY' and tc.table_name not like UPPER('%_SCHEMA_HISTORY') ) as meta where meta.pk_seq is not null; \gexec
+
+------------------------------- create
+
+export PGPASSWORD=invalid
+
+pg_dump -h sp2-git-db-201 -p 5432 -d praefecthq_production -Fc -s -U postgres | pg_restore -d praefecthq_production -h sp2-praefect-db-201 -p 5432 -U postgres
+
+CREATE PUBLICATION percpub FOR ALL TABLES;
+
+CREATE SUBSCRIPTION percsub CONNECTION 'host=sp2-git-db-201 dbname=praefecthq_production user=postgres password=invalid' PUBLICATION percpub WITH (copy_data = true);
+
+------------------------- delete
+
+drop PUBLICATION pergit;
+
+select pg_drop_replication_slot('pergit');
+
+
+
+select pg_drop_replication_slot('pergit');
+
+alter subscription percsub disable ;
+
+alter subscription percsub set (slot_name = none);
+
+drop subscription percsub ;
+
+
+
+———  master
+
+select * from pg_publication \gx
+
+select * from pg_stat_replication \gx
+
+select * from pg_replication_slots \gx
+
+
+
+——— replica
+
+select * from pg_subscription \gx
+
+select * from pg_stat_subscription \gx
+
+select * from pg_subscription_rel \gx
+
+
+
+———————————————  отставание
+
+SELECT redo_lsn, slot_name,restart_lsn,  round((redo_lsn-restart_lsn) / 1024 / 1024 / 1024, 2) AS GB_behind  FROM pg_control_checkpoint(), pg_replication_slots; 
+
+SELECT pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn) FROM pg_stat_replication;
+
+
+
+select * from pg_tables where schemaname='praefecthq_production';
+
+
+
+ALTER SUBSCRIPTION allsub REFRESH PUBLICATION;
+
+Подписку можно временно включать и выключать:
+ALTER SUBSCRIPTION allsub ENABLE;
+ALTER SUBSCRIPTION allsub DISABLE;
+
+
+
+\dRp 
+
+\dRs
+
