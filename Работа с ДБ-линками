@@ -1,0 +1,29 @@
+Для начала создается т.н. сервер, ДБ-линк:
+
+CREATE SERVER glbvldsrv
+  FOREIGN DATA WRAPPER glbvld
+  OPTIONS (dbname 'edu_power_global', host '10.122.2.100', port '54370');
+
+dbname: в какую базу смотрит ДБ Линк
+host: адрес хоста, где находится БД
+
+
+После этого, сопоставить пользователя, с этим ДБ-линком
+
+CREATE USER MAPPING FOR edu_power_report
+  SERVER glbvldsrv
+  OPTIONS (USER 'global_dblink_supplier', password 'global_dblink_supplier');
+
+edu_power_report - пользователь, которому сопоставляется ДБ-Линк
+glbvldsrv - имя ДБ-линка
+user и password - имя пользователя и пароль, по которыми мы пускаем юзера edu_power_report в БД edu_power_global
+
+
+На всякий случай выдать грант USAGE, юзеру edu_power_report, для вызова ДБ-линка
+
+GRANT USAGE ON FOREIGN SERVER glbvldsrv TO edu_power_report;
+
+Просмотр информации
+
+\des+ - показывает инфу по ДБ-линкам
+\deu+ - показывает информацию по сопоставлениям, с паролями
