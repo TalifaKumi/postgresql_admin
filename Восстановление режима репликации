@@ -1,0 +1,59 @@
+
+Остановить сервисы patroni на всех узлах ГЕО
+
+sudo systemctl stop patroni
+
+
+Убедиться что хранилице бекапов на втором плече настроено правильно (должно быть - prod)
+
+
+
+postgres@mg13-bkp01:~$ grep repo-path /etc/pgbackrest.conf
+repo-path=/data/backups/prod/pgbackrest
+
+
+Произвести реинициализацию patroni. На каждом узле каждой БД второго плеча.
+
+rm /data/postgresql/11/data
+mkdir /data/postgresql/11/data
+chmod 700 /data/postgresql/11/data
+
+
+На любом из узлов каждого кластера БД второго плеча,  
+
+PATRONI_NAME=$(grep '^scope:' /etc/patroni/config.yml | cut -f2 -d'"')
+patronictl -c /etc/patroni/config.yml remove $PATRONI_NAME <<EOF
+$PATRONI_NAME
+Yes I am aware
+EOF
+
+
+По-очереди запустить patroni на всех узлах второго плеча
+
+sudo systemctl start patroni
+
+
+
+По завершению инициализации вид будет такой
+
+postgres@sp30-audit-db201:~$ patronictl -c /etc/patroni/config.yml list
++------------------+----------------------------------+----------------+---------+----+-----------+
+| Member           | Host                             | Role           | State   | TL | Lag in MB |
++ Cluster: sp30_db_audit_01 (6969534751189227364) ----+----------------+---------+----+-----------+
+| sp30-audit-db201 | sp30-audit-db201.prod.pcbl.local | Replica        | running | 13 |         0 |
+| sp30-audit-db202 | sp30-audit-db202.prod.pcbl.local | Standby Leader | running | 13 |           |
++------------------+----------------------------------+----------------+---------+----+-----------+
+
+Восстанавливаем слоты репликации на основном контуре
+
+pg_receivewal --username=replication --host=10.122.2.100 --port=54440 --verbose --slot=other_leg --create-slot --if-not-exists
+pg_receivewal --username=replication --host=10.122.2.100 --port=54370 --verbose --slot=other_leg --create-slot --if-not-exists
+pg_receivewal --username=replication --host=10.122.2.100 --port=54310 --verbose --slot=other_leg --create-slot --if-not-exists
+pg_receivewal --username=replication --host=10.122.2.100 --port=54390 --verbose --slot=other_leg --create-slot --if-not-exists
+pg_receivewal --username=replication --host=10.122.2.100 --port=54610 --verbose --slot=other_leg --create-slot --if-not-exists
+pg_receivewal --username=replication --host=10.122.2.100 --port=54540 --verbose --slot=other_leg --create-slot --if-not-exists
+pg_receivewal --username=replication --host=10.122.2.100 --port=54510 --verbose --slot=other_leg --create-slot --if-not-exists
+pg_receivewal --username=replication --host=10.122.2.100 --port=54620 --verbose --slot=other_leg --create-slot --if-not-exists
+
+
+
