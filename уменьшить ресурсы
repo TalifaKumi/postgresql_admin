@@ -1,0 +1,48 @@
+было:
+
+
+
+             total        used        free      shared  buff/cache   available
+
+Mem:            47G        705M         34G        1.1G         11G         44G
+
+Swap:          4.0G          0B        4.0G
+
+
+
+    parameters:
+    
+        max_worker_processes: '12'
+        max_prepared_transactions: '36'
+          autovacuum_work_mem: 1004MB
+
+    effective_cache_size: 43375MB
+      maintenance_work_mem: 2008MB
+    max_parallel_workers: 12
+ 
+     shared_buffers: 12048MB
+
+
+
+--------------  репорт
+  parameters:
+
+        max_worker_processes: '4'
+        max_prepared_transactions: '12'
+    
+          autovacuum_work_mem: 165MB
+    effective_cache_size: 7164MB
+      maintenance_work_mem: 331MB
+    max_parallel_workers: 4
+ 
+      shared_buffers: 1990MB
+      
+      ------------  geo
+    
+        max_worker_processes: '12'
+        max_prepared_transactions: '36'
+          autovacuum_work_mem: 1004MB
+ ---          effective_cache_size: 3072MB
+  --          maintenance_work_mem: 512MB
+             max_parallel_workers: 12
+   --            shared_buffers: 1048MB
