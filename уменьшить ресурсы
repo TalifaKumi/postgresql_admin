@@ -53,7 +53,7 @@ Swap:          4.0G          0B        4.0G
    
           max_worker_processes: '4'
           autovacuum_work_mem: 1004MB
-          effective_cache_size: 3072MB
+          effective_cache_size: 4096MB
           maintenance_work_mem: 512MB
           max_parallel_workers: 4           
-          shared_buffers: 1048MB
+          shared_buffers: 2048MB
