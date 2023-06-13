@@ -1,6 +1,6 @@
 ================= НА КЛАСТЕРАХ тест
 ============== правим станзу
-======. /etc/patroni/config.yml  правим  more config.yml | grep stanza
+======. /etc/patroni/config.yml  правим  more  /etc/patroni/config.yml | grep stanza
 
     command: /usr/bin/pgbackrest --process-max=12 --stanza=git12 --delta restore
     restore_command: pgbackrest --stanza=git12 archive-get %f "%p"
@@ -9,6 +9,7 @@
     
     patronictl -c /etc/patroni/config.yml list
     patronictl -c /etc/patroni/config.yml reload sp30_db12_git_01
+    patronictl -c /etc/patroni/config.yml reload sp30_db12_praefect_01
     
 ============ на бекапном добавляем
 ===================.  more /etc/pgbackrest.conf. тест
