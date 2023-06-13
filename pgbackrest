@@ -1,0 +1,100 @@
+================= НА КЛАСТЕРАХ тест
+============== правим станзу
+======. /etc/patroni/config.yml  правим  more config.yml | grep stanza
+
+    command: /usr/bin/pgbackrest --process-max=12 --stanza=git12 --delta restore
+    restore_command: pgbackrest --stanza=git12 archive-get %f "%p"
+    command: /usr/bin/pgbackrest --process-max=12 --stanza=git12 --delta restore
+    archive_command: pgbackrest --stanza=git12 archive-push %p    
+    
+    patronictl -c /etc/patroni/config.yml list
+    patronictl -c /etc/patroni/config.yml reload sp30_db12_git_01
+    
+============ на бекапном добавляем
+===================.  more /etc/pgbackrest.conf. тест
+
+[git12]
+pg1-host=sp30-git-db203.prod.pcbl.local
+pg2-host=sp30-git-db204.prod.pcbl.local
+pg1-path=/data/postgresql/12/data
+pg2-path=/data/postgresql/12/data
+
+=============== check config
+
+ pgbackrest --stanza=git12 --log-level-console=info check
+
+pgbackrest --stanza=git12 --log-level-console=info stanza-create
+pgbackrest --type=full --stanza=git12 backup
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+================= Добавляется на всех PostgreSQL кластерах в cd прод
+
+[global]
+repo1-host=mg2-bkp-01
+repo1-retention-full=2
+repo1-host-user=postgres
+archive-async=y
+
+======. /etc/patroni/config.yml  правим  more config.yml | grep stanza
+
+    command: /usr/bin/pgbackrest --process-max=12 --stanza=git12 --delta restore
+    restore_command: pgbackrest --stanza=git12 archive-get %f "%p"
+    command: /usr/bin/pgbackrest --process-max=12 --stanza=git12 --delta restore
+    archive_command: pgbackrest --stanza=git12 archive-push %p     
+        
+===================.  more /etc/pgbackrest.conf. тест
+# Необходимо проработать вопрос от отказа от отдельной переменной
+# для наименования каталога резервных копий.
+# один из вариантов { inventory_hostname_short.split('-')[1] }}
+[git12]
+pg1-path=/data/postgresql/12/data
+pg2-path=/data/postgresql/12/data
+
+ ======. /etc/patroni/config.yml  правим  more config.yml | grep stanza
+
+    command: /usr/bin/pgbackrest --process-max=12 --stanza=git12 --delta restore
+    restore_command: pgbackrest --stanza=git12 archive-get %f "%p"
+    command: /usr/bin/pgbackrest --process-max=12 --stanza=git12 --delta restore
+    archive_command: pgbackrest --stanza=git12 archive-push %p   
+
+[global]
+repo1-host=mg13-bkp01.prod.pcbl.local
+repo1-retention-full=2
+repo1-host-user=postgres
+archive-async=y
+spool-path=/var/spool/pgbackrest
+
+================ НА БЕКАПНОМ в добавляем /etc/pgbackrest.conf
+
+[git12]
+pg1-host=sp30-git-db203.prod.pcbl.local
+pg2-host=sp30-git-db204.prod.pcbl.local
+pg1-path=/data/postgresql/12/data
+pg2-path=/data/postgresql/12/data
+
+================= 
+=============== check config
+
+ pgbackrest --stanza=git12 --log-level-console=info check
+
+pgbackrest --stanza=git12 --log-level-console=info stanza-create
+pgbackrest --type=full --stanza=git12 backup
