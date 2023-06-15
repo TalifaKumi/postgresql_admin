@@ -30,7 +30,7 @@ FROM pg_class C LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
 WHERE nspname IN ('edu_power_audit') AND C.relkind <> 'i' AND nspname !~ '^pg_toast' and relname like '%audit%' 
 ORDER BY pg_total_relation_size(C.oid) DESC;
   
-  ---------------------------------------  индексы отдельно
+  ---------------------------------------  c индексfvb
   SELECT    TABLE_NAME,
     pg_size_pretty(table_size) AS table_size,
     pg_size_pretty(indexes_size) AS indexes_size,
