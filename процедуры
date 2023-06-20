@@ -1,3 +1,18 @@
 select n.nspname , p.proname 
 from pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 where n.nspname like '%tech_d15n_depersonalize_by_users%';
+
+
+tech_d15n_depersonalize_by_users
+
+SELECT n.nspname, p.proname FROM pg_catalog.pg_namespace n JOIN pg_catalog.pg_proc p ON p.pronamespace = n.oid WHERE n.nspname = 'edu_power_audit';
+
+SELECT proname,prosrc FROM pg_proc WHERE proname like 'tech%v2';
+
+SELECT proname,prosrc FROM pg_proc WHERE proname like 'tech%day';
+
+SELECT proname,prosrc FROM pg_proc WHERE proname like 'tech_d15n_depersonalize_by_users';
+
+select p.proname 
+from pg_catalog.pg_proc p join pg_catalog.pg_namespace n ON n.oid = p.pronamespace where p.proname like 'tech_d15n_depersonalize_by_users%';
+
