@@ -1,0 +1,3 @@
+select n.nspname , p.proname 
+from pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+where n.nspname like '%tech_d15n_depersonalize_by_users%';
