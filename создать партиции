@@ -36,3 +36,24 @@ FROM pg_inherits
          JOIN pg_namespace nmsp_child    ON nmsp_child.oid   = child.relnamespace
 WHERE parent.relname='audit_messages_sectioned'
 order by  child.relname ;
+
+
+SELECT proname,prosrc FROM pg_proc WHERE proname like 'tech_add_partition_audit_messages_sectioned';
+DECLARE                                                                                                        
+_start_dt timestamp;                                                                                         
+_end_dt timestamp;                                                                                           
+_sql text;                                                                                                   
+BEGIN -- Проверка параметров                                                                                         
+IF NOT _month BETWEEN 1 AND 12 THEN                                                                            
+RAISE EXCEPTION 'Месяц выходит за границы (1-12)';                                                           
+END IF;                                                                                                        
+IF _year < 2021 THEN                                                                                           
+RAISE EXCEPTION 'Год меньше допустимого значения (2021)';                                                    
+END IF;                                                                                                        
+-- Вычисление дат для create_ts                                                                                
+_start_dt = make_timestamp(_year, _month, 1, 0, 0, 0);                                                         
+_end_dt = _start_dt + INTERVAL '1 month';                                                                      
+RAISE NOTICE 'Попытка создания партиции за % месяц, % год', _month, _year;                                     
+_sql = 'CREATE TABLE IF NOT EXISTS audit_messages_sectioned_y'||_year::char(4)||'m'||LPAD(_month::varchar, 2, '0')||' PARTITION OF audit_messages_sectioned FOR VALUES FROM ('''||_start_dt::varchar||''') TO ('''||_end_dt::varchar||''');' ;                                                                                                              
+EXECUTE _sql;                                                                                                  
+END;
