@@ -5,8 +5,8 @@ SET ROLE edu_power_audit;
 DO
 $$
     DECLARE
-        start_date DATE := to_date('2024-02-01', 'yyyy-mm-dd');
-        end_date DATE := to_date('2030-01-01', 'yyyy-mm-dd');
+        start_date DATE := to_date('2030-02-01', 'yyyy-mm-dd');
+        end_date DATE := to_date('2044-01-01', 'yyyy-mm-dd');
         curMonth INTEGER;
         curYear INTEGER;
     BEGIN
