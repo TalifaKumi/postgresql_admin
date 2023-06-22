@@ -1,0 +1,38 @@
+\c edu_power_audit
+SET SCHEMA 'edu_power_audit';
+SET ROLE edu_power_audit;
+
+DO
+$$
+    DECLARE
+        start_date DATE := to_date('2024-02-01', 'yyyy-mm-dd');
+        end_date DATE := to_date('2030-01-01', 'yyyy-mm-dd');
+        curMonth INTEGER;
+        curYear INTEGER;
+    BEGIN
+
+        LOOP
+            EXIT WHEN start_date > end_date;
+            curMonth := extract(MONTH from start_date);
+            curYear := extract(YEAR from start_date);
+            RAISE NOTICE 'creating partition for % month of % year', curMonth, curYear;
+            CALL tech_add_partition_audit_messages_sectioned(curMonth, curYear);
+            start_date := start_date + INTERVAL '1 month';
+        END LOOP;
+
+        RAISE NOTICE 'done';
+
+    END
+$$;
+
+============  проверка
+SELECT
+    parent.relname      AS table_name,
+    child.relname       AS partition_name
+FROM pg_inherits
+         JOIN pg_class parent            ON pg_inherits.inhparent = parent.oid
+         JOIN pg_class child             ON pg_inherits.inhrelid   = child.oid
+         JOIN pg_namespace nmsp_parent   ON nmsp_parent.oid  = parent.relnamespace
+         JOIN pg_namespace nmsp_child    ON nmsp_child.oid   = child.relnamespace
+WHERE parent.relname='audit_messages_sectioned'
+order by  child.relname ;
