@@ -1,0 +1,44 @@
+
+ssh -l i.fast sp2-group-db-201.prod-ins2.pcbl.local
+\c edu_power_configuration
+
+SET SCHEMA 'edu_power_configuration';
+
+INSERT INTO configurations (entity_id, property_code, value, user_id)
+VALUES ('99999999-9999-9999-9999-999999999999',  'edu.service.core.audit.api-reg-ts', '2023-06-XXT14:30:00.000+03:00', null)
+ON CONFLICT (property_code, entity_id) where user_id is NULL DO UPDATE
+SET value = '2023-06-XXT14:30:00.000+03:00';
+
+INSERT INTO configurations (entity_id, property_code, value, user_id)
+VALUES ('99999999-9999-9999-9999-999999999999',  'edu.service.core.audit.api-reg-ts', '2023-06-26T17:30:00.000+03:00', null)
+ON CONFLICT (property_code, entity_id) where user_id is NULL DO UPDATE
+SET value = '2023-06-26T17:30:00.000+03:00';
+
+
+===========================
+	
+1) ФФ edu.service.core.audit.old-api-reg в значение 0
+2) ФФ edu.service.core.audit.new-api-reg в значение 0
+
+Затем установить:
+3) ФФ edu.service.core.audit.api-reg-ts в значение (текущее время по МСК + 15 минут), (например '2023-06-27T17:30:00.000+03:00'). если мы делаем это 27 июня в 17:15
+
+после 3 пункта выполняем на хосте sp2-group-db201.prod.pcbl.local 
+\c edu_power_configuration - база
+
+SET SCHEMA 'edu_power_configuration'; 
+
+и выполняем вставку
+
+INSERT INTO configurations (entity_id, property_code, value, user_id)
+VALUES ('99999999-9999-9999-9999-999999999999',  'edu.service.core.audit.api-reg-ts', '2023-06-27T17:30:00.000+03:00', null)
+ON CONFLICT (property_code, entity_id) where user_id is NULL DO UPDATE
+SET value = '2023-06-27T17:30:00.000+03:00'; 
+
+через 10 минут  чего-то там в кибане, да?
+
+потом делаем домиграцию https://jira.pcbltools.ru/jira/browse/SM-40441
+
+sp2-audit-db-201.prod-ins2.pcbl.local бд edu_power_audit
+
+CALL tech_migrate_data_to_audit_messages_sectioned_timestamp('2023-06-27', '2023-06-27 17:30:00.000'); 
