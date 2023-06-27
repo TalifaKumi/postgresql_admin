@@ -1,3 +1,7 @@
+analyze edu_power_audit.audit_messages_sectioned;
+select relname, last_analyze from pg_stat_user_tables where relname like 'audit_messages_sectioned%’;
+
+
 pg_stat_startup - время запуска бд, доступность бд
 
 pg_db_oldest_xid - стистистика транзакций в базе данных заменены постоянным («замороженным») идентификатором транзакции.
