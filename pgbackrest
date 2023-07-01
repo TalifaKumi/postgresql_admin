@@ -64,7 +64,43 @@ chmod 640 /etc/pgbackrest/pgbackrest.conf;
 chown postgres:postgres /etc/pgbackrest/pgbackrest.conf;
 
 
+========================= новый узел
 
+/etc/pgbackrest.conf на узле
+
+/etc/pgbackrest.conf на бекапном сервере
+
+/data/backups-mirror/huawei/pgbackrest/archive/praefect/archive.info
+
+/data/backups-mirror/huawei/pgbackrest/archive/praefect/archive.info.copy
+
+/data/backups-mirror/huawei/pgbackrest/backup/git/backup.info
+
+/data/backups-mirror/huawei/pgbackrest/backup/git/backup.info.copy
+
+================= сделать бекап запускаем на  mg2-bkp-01 
+
+ pgbackrest --type=full --stanza=git backup
+
+pgbackrest --type=full --stanza=praefect backup
+
+============== удалить 
+
+pgbackrest expire --stanza=audit --set=20230610-223006F_20230616-223006D
+
+
+
+========
+pgbackrest --stanza=praefect --log-level-console=info check
+pgbackrest --stanza=praefect --log-level-console=info stanza-delete
+pgbackrest --stanza=praefect --log-level-console=info stop
+pgbackrest --stanza=praefect --force --log-level-console=info stanza-delete
+pgbackrest --stanza=praefect --force --log-level-console=info stanza-create
+
+pgbackrest --stanza=git --log-level-console=info check
+pgbackrest --stanza=praefect --log-level-console=info stanza-delete
+pgbackrest --stanza=praefect --log-level-console=info stop
+pgbackrest --stanza=praefect --force --log-level-console=info stanza-delete
 
 
 
