@@ -28,7 +28,40 @@ pgbackrest --stanza=git12 --log-level-console=info stanza-create
 pgbackrest --type=full --stanza=git12 backup
 
 
-
+install -d /usr/local/bin
+install -m 755 pgbackrest /usr/local/bin
+ 
+# pgbackrest
+pgBackRest 2.26 - General help
+ 
+Usage:
+    pgbackrest [options] [command]
+ 
+Commands:
+    archive-get     Get a WAL segment from the archive.
+    archive-push    Push a WAL segment to the archive.
+    backup          Backup a database cluster.
+    check           Check the configuration.
+    expire          Expire backups that exceed retention.
+    help            Get help.
+    info            Retrieve information about backups.
+    restore         Restore a database cluster.
+    stanza-create   Create the required stanza data.
+    stanza-delete   Delete a stanza.
+    stanza-upgrade  Upgrade a stanza.
+    start           Allow pgBackRest processes to run.
+    stop            Stop pgBackRest processes from running.
+    version         Get version.
+ 
+Use 'pgbackrest help [command]' for more information.
+ 
+# mkdir -p -m 770 /var/log/pgbackrest;
+chown postgres:postgres /var/log/pgbackrest;
+mkdir -p /etc/pgbackrest;
+mkdir -p /etc/pgbackrest/conf.d;
+touch /etc/pgbackrest/pgbackrest.conf;
+chmod 640 /etc/pgbackrest/pgbackrest.conf;
+chown postgres:postgres /etc/pgbackrest/pgbackrest.conf;
 
 
 
