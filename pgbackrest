@@ -1,6 +1,7 @@
 ================= НА КЛАСТЕРАХ тест
-============== правим станзу
-======. /etc/patroni/config.yml  правим  more  /etc/patroni/config.yml | grep stanza
+============== правим станзу на нодах
+======. /etc/patroni/config.yml  /etc/pgbackrest.conf
+more  /etc/patroni/config.yml | grep stanza
 
     command: /usr/bin/pgbackrest --process-max=12 --stanza=git12 --delta restore
     restore_command: pgbackrest --stanza=git12 archive-get %f "%p"
@@ -26,7 +27,7 @@ pg2-path=/data/postgresql/12/data
 
 pgbackrest --stanza=git12 --log-level-console=info stanza-create
 pgbackrest --type=full --stanza=git12 backup
-
+==================
 
 install -d /usr/local/bin
 install -m 755 pgbackrest /usr/local/bin
@@ -84,11 +85,20 @@ chown postgres:postgres /etc/pgbackrest/pgbackrest.conf;
 
 pgbackrest --type=full --stanza=praefect backup
 
-============== удалить 
+============== удалить бекап
 
 pgbackrest expire --stanza=audit --set=20230610-223006F_20230616-223006D
 
+==================
+pgbackrest --stanza=praefect --log-level-console=info stop
+pgbackrest --stanza=praefect12 --log-level-console=info stop
+pgbackrest --stanza=git --log-level-console=info stop
+pgbackrest --stanza=git12 --log-level-console=info stop
 
+pgbackrest --stanza=praefect --force --log-level-console=info stanza-delete
+pgbackrest --stanza=praefect12 --force --log-level-console=info stanza-delete
+pgbackrest --stanza=git --force --log-level-console=info stanza-delete
+pgbackrest --stanza=git12 --force --log-level-console=info stanza-delete
 
 ========
 pgbackrest --stanza=praefect --log-level-console=info check
@@ -98,21 +108,37 @@ pgbackrest --stanza=praefect --force --log-level-console=info stanza-delete
 pgbackrest --stanza=praefect --force --log-level-console=info stanza-create
 
 pgbackrest --stanza=git --log-level-console=info check
-pgbackrest --stanza=praefect --log-level-console=info stanza-delete
+pgbackrest --stanza=git --log-level-console=info stanza-delete
+pgbackrest --stanza=git --log-level-console=info stop
+pgbackrest --stanza=git --force --log-level-console=info stanza-delete
+
+===========================  план
+на всех нодах 
+ /etc/patroni/config.yml  /etc/pgbackrest.conf
+more  /etc/patroni/config.yml | grep stanza  
+    
+    patronictl -c /etc/patroni/config.yml list
+    patronictl -c /etc/patroni/config.yml reload 
+
+--- на бекапном /etc/pgbackrest.conf
+---- на бекапном удаляем тарую станзу
+
 pgbackrest --stanza=praefect --log-level-console=info stop
+pgbackrest --stanza=git --log-level-console=info stop
+
 pgbackrest --stanza=praefect --force --log-level-console=info stanza-delete
+pgbackrest --stanza=git --force --log-level-console=info stanza-delete
 
+---создаем
+pgbackrest --stanza=praefect --force --log-level-console=info stanza-create
+pgbackrest --stanza=git --force --log-level-console=info stanza-create
 
+--- удалить старое потом
+pgbackrest --stanza=praefect12 --log-level-console=info stop
+pgbackrest --stanza=git12 --log-level-console=info stop
 
-
-
-
-
-
-
-
-
-
+pgbackrest --stanza=praefect12 --force --log-level-console=info stanza-delete
+pgbackrest --stanza=git12 --force --log-level-console=info stanza-delete
 
 
 
