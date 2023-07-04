@@ -1,0 +1,5 @@
+
+
+pg_dump -Ft  sbersova_data >  sbersova_data.tar
+ cp /home/postgres/sbersova_data.tar /home/i.fast/
+scp i.fast@sp2-hasura-db-02.prod-ins2.pcbl.local:/home/i.fast/sbersova_data.tar /Users/i.fast/Desktop/backup/
