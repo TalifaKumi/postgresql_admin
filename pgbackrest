@@ -83,7 +83,9 @@ chown postgres:postgres /etc/pgbackrest/pgbackrest.conf;
 
  pgbackrest --type=full --stanza=git backup
 
-pgbackrest --type=full --stanza=praefect backup
+
+
+
 
 ============== удалить бекап
 
@@ -130,8 +132,8 @@ pgbackrest --stanza=praefect --force --log-level-console=info stanza-delete
 pgbackrest --stanza=git --force --log-level-console=info stanza-delete
 
 ---создаем
-pgbackrest --stanza=praefect --force --log-level-console=info stanza-create
-pgbackrest --stanza=git --force --log-level-console=info stanza-create
+pgbackrest --stanza=praefect --log-level-console=info stanza-create
+pgbackrest --stanza=git --log-level-console=info stanza-create
 
 --- удалить старое потом
 pgbackrest --stanza=praefect12 --log-level-console=info stop
@@ -140,7 +142,9 @@ pgbackrest --stanza=git12 --log-level-console=info stop
 pgbackrest --stanza=praefect12 --force --log-level-console=info stanza-delete
 pgbackrest --stanza=git12 --force --log-level-console=info stanza-delete
 
+pgbackrest --type=full --stanza=git backup
 
+pgbackrest --type=full --stanza=praefect backup
 
 ================= Добавляется на всех PostgreSQL кластерах в cd прод
 
