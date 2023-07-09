@@ -2,3 +2,10 @@ SELECT table_catalog, table_schema, table_name, privilege_type FROM information_
 
 ============= права на схему
  \dn+
+
+
+s21_gitlab=# grant USAGE ON SCHEMA gitlab_integration to ro_support;
+GRANT
+s21_gitlab=# grant select on all tables in schema gitlab_integration to ro_support;
+GRANT
+s21_gitlab=# 
