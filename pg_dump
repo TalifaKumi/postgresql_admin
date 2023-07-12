@@ -1,5 +1,15 @@
-
-
 pg_dump -Ft  sbersova_data >  sbersova_data.tar
  cp /home/postgres/sbersova_data.tar /home/i.fast/
 scp i.fast@sp2-hasura-db-02.prod-ins2.pcbl.local:/home/i.fast/sbersova_data.tar /Users/i.fast/Desktop/backup/
+
+ cp /var/log/postgresql/postgresql-Wed-12.log /home/i.fast/
+scp i.fast@sp2-report-db-203.prod-ins2.pcbl.local:/home/i.fast/postgresql-Wed-12.log /Users/i.fast/Desktop/backup/postgresql-Wed-12.log
+
+
+select pg_terminate_backend(pid) from pg_stat_activity where datname='grafana';
+postgres=#  ALTER DATABASE grafana rename to grafana_1;
+pg_dumpall -g > dumpall_global.sql
+pg_dump -Ft grafana > dump_grafana.sql
+
+CREATE DATABASE grafana WITH TEMPLATE = template0 ENCODING = 'UTF8' LC_COLLATE = 'en_US.UTF-8' LC_CTYPE = 'en_US.UTF-8';
+pg_restore -d grafana dump_grafana.sql
