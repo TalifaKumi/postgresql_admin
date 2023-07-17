@@ -1,0 +1,102 @@
+===========  подготовка
+- Ставим новые пакеты новой версии PostgreSQL.
+  sudo apt-get update
+  sudo apt-get install postgresql-15 postgresql-server-dev-15
+
+- Создаем новую базу в правильной locace. Это общие шаги
+diff /etc/postgresql/14/main/postgresql.conf /etc/postgresql/15/main/postgresql.conf
+diff /etc/postgresql/14/main/pg_hba.conf /etc/postgresql/15/main/pg_hba.conf
+
+- Делаем pg_upgrade. Запускаем с ключом «check». 
+  Check делает почти все, что может апгрейд сделать в реальности. 
+  И при этом, если у вас есть какие-то несовместимости с типами данных, со схемой и это все вылезет, то он ругнется, отвалится, но при этом вы не попортили старую базу и не сделала никаких изменений в пустом кластере. 
+  И вы можете сразу прекратить процедуру апгрейда, запланированный даунтайм и общий кипеш. И вернуться к тесту и посмотреть, что у вас там не так и исправить это.
+/usr/lib/postgresql/15/bin/pg_upgrade \
+  --old-datadir=/var/lib/postgresql/14/main \
+  --new-datadir=/var/lib/postgresql/15/main \
+  --old-bindir=/usr/lib/postgresql/14/bin \
+  --new-bindir=/usr/lib/postgresql/15/bin \
+  --old-options '-c config_file=/etc/postgresql/14/main/postgresql.conf' \
+  --new-options '-c config_file=/etc/postgresql/15/main/postgresql.conf' \
+  --check
+
+- Pg_dumpall — schema-only. 
+  К сожалению апгрейд с check не все показывает. И мы себя дополнительно проверяем через pg_dumpall – schema-only, и накатываем новую базу данных. 
+  Недостаток этой процедуры в том, что потом придется пересоздать кластер заново пустой. 
+  Но она того стоит, потому что бывали ситуации, когда check не поймал у нас проблему апгрейда, а dump поймал.
+
+- Заодно с некоторыми extensions есть особые ситуации. Особый яркий пример – это PostGIS, потому что PostGIS обновляется до обновления Postgres. 
+  Этот extension всегда нужно обновлять до обновления Postgres, потом обновлять сам Postgres. 
+  Нужно почитать changelog и выяснить – можете ли вы вот так просто, пользуясь pg_upgrade обновить, потому что на старых версия этого сделать было нельзя. 
+  Там требовалось через dump restore делать.
+
+========== вперед
+
+
+- Создаем базу в новой locale, если мы пользовались pg_dumpall only, restore.
+
+- Останавливаем старую базу данных. При этом не забываем о том, что pgbouncer нам поможет подвесить соединение к базе данных, т. е. приложение не потеряет соединение, а просто подвиснут.
+sudo systemctl stop postgresql.service
+
+- Не забываем про checkpoints, которые нам помогают очистить память и скинуть ее на диск, чтобы побыстрее остановить базу данных.
+
+- И следующим шагом запускаем обновление pg_upgrade. 
+  Сама процедура переноса счетчика транзакции, схемы данных и линковки довольно быстрая. 
+  Время обновления зависит от размера вашей базы данных именно в количестве объектов в базе данных. 
+  Может занять от минуты до 45 минут. Был у меня один раз критичный момент, когда обновление шло 45 минут, но это отдельная история. 
+  Чаще всего обновление занимает от минуты до 15 минут, независимо от размера базы данных. Это зависит от количества объектов в базе данных созданных.
+/usr/lib/postgresql/15/bin/pg_upgrade \
+  --old-datadir=/var/lib/postgresql/14/main \
+  --new-datadir=/var/lib/postgresql/15/main \
+  --old-bindir=/usr/lib/postgresql/14/bin \
+  --new-bindir=/usr/lib/postgresql/15/bin \
+  --old-options '-c config_file=/etc/postgresql/14/main/postgresql.conf' \
+  --new-options '-c config_file=/etc/postgresql/15/main/postgresql.conf'
+
+- экстеншн
+После того, как вы обновитесь, вам придется пройтись по всем extensions и обновить их вручную сказать – alter extension EXTENSION_NAME update. 
+Это обязательно. Если вы используете pg_stat_statements, то в какой-то версии они изменили количество столбцов. 
+Обновились вы через pg_upgrade, вы не увидите новые столбцы со статистикой от pg_stat_statements. 
+То же самое касается других расширений. Обязательно по всем пройтись надо.
+
+- порты
+sudo vim /etc/postgresql/15/main/postgresql.conf
+# ...and change "port = 5433" to "port = 5432"
+
+sudo vim /etc/postgresql/14/main/postgresql.conf
+# ...and change "port = 5432" to "port = 5433"
+
+
+- И нам нужно собрать эту статистику.
+sudo systemctl start postgresql.service
+psql -c "SELECT version();"
+/usr/lib/postgresql/15/bin/vacuumdb --all --analyze-in-stages
+
+- удалить старое
+apt list --installed | grep postgresql
+Remove the old PostgreSQL packages (from the listing above).
+
+sudo apt-get remove postgresql-14 postgresql-server-dev-14
+Remove the old configuration.
+
+sudo rm -rf /etc/postgresql/14/
+Log in as the postgres user once more.
+
+sudo su - postgres
+Finally, drop the old cluster data.
+
+./delete_old_cluster.sh
+
+===================  реплики
+Сначала обновляем мастер-сервер по какой-нибудь процедуре.
+Далее мы смотрим, что у нас все хорошо, приложение работает с мастером, мы нигде не накосячили, все счастливы, все работает. 
+И тогда реплика нам не нужна. Потому что, если мы накосячили, нам будет куда откатиться и сделать промоут старой реплики старой версии.
+Как мы это проверяем? Мы просто смотрим лог Postgres. И смотрим наличие ошибок и внештатных ситуаций. Разное время на это уходит. Бывает, сутки смотрим, бывает, 10 минут смотрим.
+После этого мы на серверах с репликами устанавливаем новую версию PostgreSQL.
+И pg_basebackup копируем базу данных с обновленного мастера на реплику. Старая версия реплики нам не нужна.
+Запускаем реплику на новой версии PostgreSQL.
+И если вы неопытной, то мы не рекомендуем вам использовать rsync, потому что это сложный и трудоемкий процесс. 
+Можно обновить так, но, скорее всего, вы допустите ошибку и у вас реплика превратится в бесполезный набор файлов. Поэтому до rsync дойдите только тогда, когда наберетесь опыта.
+
+
+
