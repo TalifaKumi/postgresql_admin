@@ -1,0 +1,47 @@
+Посмотреть слот репликации, более старый, чем файлы WAL.
+
+Это даст вам имя самого старого файла WAL, который все еще нужен каждому слоту репликации.
+
+SELECT slot_name, lpad((pg_control_checkpoint()).timeline_id::text, 8, '0') || lpad(split_part(restart_lsn::text, '/', 1), 8, '0') || lpad(substr(split_part(restart_lsn::text, '/', 2), 1, 2), 8, '0') AS wal_file FROM pg_replication_slots;
+
+select * from pg_replication_slots;
+
+=======  создать - удалить
+
+ select pg_drop_replication_slot('sp2_praefect_db_202');
+
+select  pg_create_physical_replication_slot('sp2_praefect_db_202');
+
+========== отставание
+
+SELECT redo_lsn, slot_name,restart_lsn,  round((redo_lsn-restart_lsn) / 1024 / 1024 / 1024, 2) AS GB_behind  FROM pg_control_checkpoint(), pg_replication_slots; 
+
+SELECT pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn) FROM pg_stat_replication;
+
+
+=============== на проде
+select * from pg_publication \gx
+
+select * from pg_stat_replication \gx
+
+select * from pg_replication_slots \gx
+
+select pg_drop_replication_slot('praefect');
+
+SELECT redo_lsn, slot_name,restart_lsn,  round((redo_lsn-restart_lsn) / 1024 / 1024 / 1024, 2) AS GB_behind  FROM pg_control_checkpoint(), pg_replication_slots; 
+
+SELECT pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn) FROM pg_stat_replication;
+
+\dRp
+
+====== на реплике
+select * from pg_subscription \gx
+
+select * from pg_stat_subscription \gx
+
+select * from pg_subscription_rel \gx
+
+\dRs
+
+
+
