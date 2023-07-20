@@ -43,5 +43,3 @@ select * from pg_subscription_rel \gx
 
 \dRs
 
-
-
