@@ -35,6 +35,8 @@ SELECT pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn) FROM pg_stat_replicatio
 \dRp
 
 ====== на реплике
+select pg_is_in_recovery(), pg_is_wal_replay_paused(), pg_last_wal_receive_lsn(), pg_last_wal_replay_lsn(), pg_last_xact_replay_timestamp();
+
 select * from pg_subscription \gx
 
 select * from pg_stat_subscription \gx
