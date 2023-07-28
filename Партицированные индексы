@@ -1,0 +1,28 @@
+Уже вижу что CREATE INDEX i_audit_messages_sectioned_on_operation_code_id ON audit_messages_sectioned (operation_code_id); - плохая идея. 
+У меня выполняется до сих пор, а это блокирующее действие. Нужно делать CREATE INDEX CONCURRENTLY, но это не работает для секционированных таблиц. 
+Поэтому нужно делать CREATE INDEX CONCURRENTLY to create the index on each partition. 
+Then use CREATE INDEX to create the index on the partitioned table. That will be fast, and the indexes on the partitions will become the partitions of the index.
+
+3
+
+Step 1: Create an index on the partitioned (parent) table
+
+CREATE INDEX foo_idx ON ONLY foo (col1, col2, col3);
+This step creates an invalid index. That way, none of the table partitions will get the index applied automatically.
+
+Step 2: Create the index for each partition using CONCURRENTLY and attach to the parent index
+
+CREATE INDEX CONCURRENTLY foo_idx_1
+  ON foo_1 (col1, col2, col3);
+ALTER INDEX foo_idx
+  ATTACH PARTITION foo_idx_1;
+
+
+================================================================
+
+CREATE INDEX i_audit_messages_sectioned_on_operation_code_id ON ONLY audit_messages_sectioned (operation_code_id);
+
+CREATE  INDEX CONCURRENTLY i_audit_messages_sectioned_on_operation_code_id_y2021m08  ON audit_messages_sectioned_y2021m08(operation_code_id);
+
+ALTER INDEX i_audit_messages_sectioned_on_operation_code_id  ATTACH PARTITION i_audit_messages_sectioned_on_operation_code_id_y2021m08 ;
+
