@@ -26,3 +26,11 @@ CREATE  INDEX CONCURRENTLY i_audit_messages_sectioned_on_operation_code_id_y2021
 
 ALTER INDEX i_audit_messages_sectioned_on_operation_code_id  ATTACH PARTITION i_audit_messages_sectioned_on_operation_code_id_y2021m08 ;
 
+
+SELECT 'CREATE INDEX CONCURRENTLY IF NOT EXISTS i_' || child.relname || '_on_operation_code_id ON ' || child.relname || '(operation_code_id);' || E'\n' ||
+'ALTER INDEX i_audit_messages_sectioned_on_operation_code_id ATTACH PARTITION i_' || child.relname || '_on_operation_code_id;'
+FROM pg_inherits
+         JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
+         JOIN pg_class child  ON pg_inherits.inhrelid  = child.oid
+WHERE parent.relname='audit_messages_sectioned'
+
