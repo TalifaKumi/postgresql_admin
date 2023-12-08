@@ -114,3 +114,25 @@ ALTER SUBSCRIPTION allsub DISABLE;
 
 \dRs
 
+==============================
+а) На мастере:
+
+=# SELECT * FROM pg_stat_replication;
+
+А данной командой можно посмотреть настройки публикации:
+
+=# \dRp+
+
+Чтобы увидеть задержки, используем запрос:
+
+=# SELECT slot_name, confirmed_flush_lsn, pg_current_wal_lsn(), (pg_current_wal_lsn() - confirmed_flush_lsn) AS lsn_distance FROM pg_replication_slots;
+
+* значение lsn_distance — показатель задержки. Чем оно меньше, тем лучше.
+
+б) На слейве:
+
+=# SELECT * FROM pg_stat_subscription;
+
+Сведения о подписке смотрим командой:
+
+=# \dRs+
