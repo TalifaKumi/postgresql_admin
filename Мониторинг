@@ -57,3 +57,28 @@ select count(*) from pg_stat_user_indexes where idx_scan=0;
 ====================================  долгие запросы
 
 select max(clock_timestamp() - query_start) as query_age from pg_stat_activity;
+
+==========================  temp
+select datname, temp_files , pg_size_pretty(temp_bytes) as temp_file_size  FROM   pg_stat_database order by temp_bytes desc;
+
+SELECT interval '1 millisecond' * total_time AS total_exec_time, 
+total_time / calls AS avg_exec_time_ms,
+temp_blks_written,
+query AS query
+FROM pg_stat_statements
+WHERE temp_blks_written > 0
+ORDER BY temp_blks_written DESC
+LIMIT 20;
+
+
+SELECT interval '1 millisecond' * (total_exec_time+total_plan_time) AS total_exec_time, 
+(total_exec_time+total_plan_time) / calls AS avg_exec_time_ms,
+temp_blks_written,
+query AS query
+FROM pg_stat_statements
+WHERE temp_blks_written > 0
+ORDER BY temp_blks_written DESC
+LIMIT 20;
+
+
+
