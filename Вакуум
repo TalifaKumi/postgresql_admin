@@ -4,7 +4,7 @@
 ---------------------------------------   кто нуждается в вакууме
 SELECT schemaname, relname, n_tup_ins as "inserts",n_tup_upd as "updates",n_tup_del as "deletes", n_live_tup as "live_tuples", n_dead_tup as "dead_tuples"
 FROM pg_stat_user_tables 
---WHERE schemaname = '...' and relname = '....';
+WHERE n_dead_tup > 1000
 order by n_dead_tup desc;
 
 
