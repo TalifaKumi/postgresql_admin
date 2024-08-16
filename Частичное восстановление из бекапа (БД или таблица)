@@ -1,0 +1,74 @@
+Частичное восстановление из бекапа (БД или таблица)
+
+Если бекап делается pg_basebackup
+
+на примере восстановления бд alfaid в dev среде:
+1. забираем бекап с сервера. Каталог /backup/db/
+
+2. на тестовом сервере (хотя можно на этом же) распаковываем бекап в отдельную директорию
+mkdir /data/baasdev && cd /data/baasdev
+tar -xzf baas-dev-stolon1_2022-09-13_00-00_base.tar.gz
+
+3. проверь содержимое postgresql.conf, stolon-temp-postgresql.conf, pg_hba.conf
+cat stolon-temp-postgresql.conf >> postgresql.conf
+rm stolon-temp-postgresql.conf
+vi postgresql.conf
+listen_addresses = '*'
+port = '5433' # или 5432, вобщем какой не занят
+удали всё, что связано с ssl (ssl, ssl_cert_file, ssl_key_file, ssl_ca_file)
+ну и прочее лишнее (primary_conninfo, primary_slot_name)
+
+4. возьми подходящий по версии image без наворотов
+docker pull docker-hub.binary.alfabank.ru/postgres:14
+
+5. запускай БД
+docker run --name dbdev -v /data/baasdev:/var/lib/postgresql/data -d -p 5433:5433 postgres:14
+В случае ошибки "PANIC: could not locate a valid checkpoint record"
+запусти этот контейнер с bash
+docker run -it --name dbdev -v /data/baasdev:/var/lib/postgresql/data postgres:14 bash
+и выполни
+/usr/lib/postgresql/14/bin/pg_resetwal -f /var/lib/postgresql/data
+повтори запуск БД
+6. подключись к БД и достань нужное (pgadmin, dbeaver, cli)
+
+7. подготовь восстановливаемую БД
+ALTER DATABASE "alfaid" CONNECTION LIMIT 0;
+SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'alfaid';
+ALTER DATABASE "alfaid" RENAME TO "alfaid_old";
+CREATE DATABASE alfaid WITH OWNER = alfaid ENCODING = 'UTF8' LC_COLLATE = 'en_US.utf8' LC_CTYPE = 'en_US.utf8' TABLESPACE = pg_default IS_TEMPLATE = False;
+
+8. загрузи нужное в восстановливаемую БД
+положи файл в каталог, доступный изнутри контейнера и загрузи его в БД
+docker exec -it stolon_baas_dev_1_stolon_keeper psql "host=$(hostname -i) port=6432 dbname=alfaid user=alfaid password=PASSWORD" -f /var/lib/postgresql/data/postgres/2022_09_13_baas_dev_alfaid.sql alfaid
+
+9. ты великолепен
+
+Если бекап делается wal-g
+Всё тоже, за исключением
+
+в пункте 1. Архив забрать в каталоге /data/???/backup/wal-g/basebackups_005
+
+в пункте 2. Распаковка
+lz4 -dmv ./*.lz4
+
+tar -xf part_001.tar
+tar -xf part_003.tar
+tar -xf pg_control.tar
+
+Если список tar-архивов большой, то можно использовать bash-скрипт:
+
+#!/bin/bash
+
+BPATH=/backup/pg/backups/basebackups_005/base_0000000700004291000000A3/tar_partitions
+RPATH=/data/pgdata/14/archwal/data
+for file in $BPATH/*.tar
+do
+tar -xvf $file -C $RPATH
+done
+
+в пункте 3. Если нужно проиграть wal журналы
+touch recovery.signal
+скопируй жерналы из архива /data/???/backup/wal-g/wal_005/ например в PGDATA/archwal/
+распакуй их lz4 -dmv ./*.lz4
+добавь в postgresql.conf строку
+restore_command = 'cp /var/lib/postgresql/data/archwal/%f "%p"'
