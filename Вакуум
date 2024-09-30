@@ -1,4 +1,12 @@
+ALTER SYSTEM SET autovacuum_analyze_scale_factor =0.1;
+ALTER SYSTEM SET autovacuum_naptime = '30s';
 
+ALTER SYSTEM SET autovacuum_max_workers = 4;
+--ALTER SYSTEM SET autovacuum_naptime = '10min';
+ALTER SYSTEM SET autovacuum_vacuum_cost_limit = 4000;
+ALTER SYSTEM SET autovacuum_vacuum_cost_delay = 10;
+ALTER SYSTEM SET autovacuum_vacuum_scale_factor = 0.2;
+ALTER SYSTEM SET autovacuum_analyze_scale_factor = 0.3;
 
 
 ---------------------------------------   кто нуждается в вакууме
