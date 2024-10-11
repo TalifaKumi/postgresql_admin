@@ -1,0 +1,61 @@
+random() Function
+
+SELECT random();
+If you try the above syntax it will lead to the following:
+
+psql random function
+
+Generating Random Numbers Within a Range
+To generate a random number between 1 and 10, you use the following statement:
+
+SELECT random() * 10 + 1 AS RAND_1_10;
+If you try the above syntax it will lead to the following:
+
+psql random function
+
+If you want to generate the random number as an integer, you apply the floor() function to the expression as follows:
+
+SELECT floor(random() * 10 + 1)::int;
+The above query results in the following:
+
+psql random function
+
+The result will be an integer between 1 and 10.
+
+Generating Random Numbers Between Two Custom Integers
+Generally, to generate a random number between two integers l and h, you use the following statement:
+
+SELECT floor(random() * (h-l+1) + l)::int;
+For example, to generate a random number between 20 and 50:
+
+SELECT floor(random() * (50 - 20 + 1) + 20)::int;
+Creating a User-Defined Function for Random Numbers
+To create a user-generated function that returns a random number between two numbers l and h:
+
+CREATE OR REPLACE FUNCTION random_between(low INT ,high INT) 
+   RETURNS INT AS
+$$
+BEGIN
+   RETURN floor(random()* (high-low + 1) + low);
+END;
+$$ LANGUAGE 'plpgsql' STRICT;
+The following statement calls the random_between() function and returns a random number between 1 and 100:
+
+SELECT random_between(1,100);
+Output:
+
+psql random function
+
+The output will be an integer between 1 and 100.
+
+Generating Multiple Random Numbers
+If you want to get multiple random numbers between two integers, you use the following statement.
+
+SELECT random_between(1,100)
+FROM generate_series(1,5);
+Output:
+
+
+
+This statement returns five random integers within the specified range.
+
