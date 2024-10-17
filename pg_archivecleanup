@@ -1,0 +1,4 @@
+pg_controldata -D -- последний чекпоинт
+pg_archivecleanup -d удаляет все до
+
+https://www.percona.com/blog/postgresql-wal-retention-and-clean-up-pg_archivecleanup/
