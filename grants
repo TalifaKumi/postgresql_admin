@@ -1,3 +1,5 @@
+https://postgrespro.ru/docs/postgresql/9.6/information-schema?lang=en
+
 SELECT table_catalog, table_schema, table_name, privilege_type FROM information_schema.table_privileges WHERE grantee = 'support';
 
 ============= права на схему
@@ -9,3 +11,16 @@ GRANT
 s21_gitlab=# grant select on all tables in schema gitlab_integration to ro_support;
 GRANT
 s21_gitlab=# 
+
+
+==========================
+SELECT grantee, table_schema, table_name, privilege_type FROM information_schema.table_privileges where table_schema not in ('pg_catalog','postgres_exporter','profile','information_schema');  --- на таблицы
+select grantee, table_schema, table_name, privilege_type from information_schema.role_table_grants where table_schema not in ('pg_catalog','postgres_exporter','profile','information_schema');  --- на таблицы минус паблис
+
+
+select grantee, object_schema,object_name,object_type,privilege_type FROM information_schema.usage_privileges where object_schema not in ('pg_catalog','postgres_exporter','profile','information_schema'); -- на объекты не таблицы
+select grantee, object_schema,object_name,object_type,privilege_type FROM information_schema.role_usage_grants where object_schema not in ('pg_catalog','postgres_exporter','profile','information_schema'); -- на объекты не таблицы минус паблик
+
+select constraint_schema,constraint_name,table_schema,table_name,constraint_type from information_schema.table_constraints;
+
+routine_sequence_usage 
