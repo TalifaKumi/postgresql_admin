@@ -8,7 +8,7 @@ SELECT table_catalog, table_schema, table_name, privilege_type FROM information_
 grant USAGE ON SCHEMA gitlab_integration to ro_support;
 grant select on all tables in schema gitlab_integration to ro_support;
 
-==========================
+========================== что у кого есть
 SELECT grantee, table_schema, table_name, privilege_type FROM information_schema.table_privileges where table_schema not in ('pg_catalog','postgres_exporter','profile','information_schema');  --- на таблицы
 select grantee, table_schema, table_name, privilege_type from information_schema.role_table_grants where table_schema not in ('pg_catalog','postgres_exporter','profile','information_schema');  --- на таблицы минус паблис
 
