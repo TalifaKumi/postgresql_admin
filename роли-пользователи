@@ -52,3 +52,29 @@ group by grantee
 , table_schema
 --, table_name
 ,is_grantable;
+
+
+
+
+SELECT pg_roles.oid,
+            pg_roles.rolname
+           FROM pg_roles
+        UNION ALL
+         SELECT 0::oid AS oid,
+            'PUBLIC'::name
+
+select
+   t.rarolename as RoleName
+   ,t.ramembername as RoleMember
+from pg_roles pr,
+(
+	select gra.rarolename, gra.ramembername
+	from pg_roles spr,
+	gp_toolkit.gp_roles_assigned gra
+	where  gra.rarolename = spr.rolname
+	and  spr.rolcanlogin = 'f'
+) as t
+where pr.rolcanlogin =  'f'
+	and pr.rolname = t.rarolename
+order by t.rarolename, t.ramembername;
+
