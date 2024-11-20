@@ -1,3 +1,9 @@
+ SELECT * FROM pgstattuple('table') \gx
+SELECT * FROM pgstatindex('idx') \gx
+
+
+
+
 =================   tsble
 https://github.com/pgexperts/pgx_scripts/blob/master/bloat/table_bloat_check.sql
 ====================  index
