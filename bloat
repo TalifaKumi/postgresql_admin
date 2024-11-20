@@ -1,4 +1,6 @@
- SELECT * FROM pgstattuple('table') \gx
+select 'select pg_size_pretty( pg_database_size( '''||datname||''' ) );' from pg_database where datname not in ('postgres','template0','template1') order by datname;
+
+SELECT * FROM pgstattuple('table') \gx
 SELECT * FROM pgstatindex('idx') \gx
 
 
