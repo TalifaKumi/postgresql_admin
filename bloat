@@ -1,3 +1,8 @@
+=================   tsble
+https://github.com/pgexperts/pgx_scripts/blob/master/bloat/table_bloat_check.sql
+====================  index
+https://github.com/pgexperts/pgx_scripts/tree/master/bloat
+=====================
 WITH constants AS (
     -- define some constants for sizes of things
     -- for reference down the query and easy maintenance
