@@ -1,0 +1,24 @@
+
+SELECT reltoastrelid::regclass 
+FROM pg_class 
+WHERE relname = 'auth_token';
+    reltoastrelid       
+--------------------------
+ pg_toast.pg_toast_170422
+
+
+select relname, vacuum_count, n_tup_del, n_live_tup, n_dead_tup from pg_stat_user_tables where relname=' pg_toast.pg_toast_170422';
+
+ relname | vacuum_count | n_tup_del | n_live_tup | n_dead_tup 
+---------+--------------+-----------+------------+------------
+
+select relname, vacuum_count, n_tup_del, n_live_tup, n_dead_tup 
+from pg_stat_sys_tables 
+where relname='pg_toast_170422';
+
+Or you can put it all together,
+
+select  cl.relname ,vacuum_count, n_tup_del, n_live_tup, n_dead_tup  
+ FROM pg_class cl 
+ inner join pg_stat_sys_tables st on st.relid = cl.reltoastrelid
+ WHERE cl.relname = 'auth_token';
