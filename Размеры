@@ -1,6 +1,8 @@
 ---------------------------  Размер базы 
 SELECT pg_size_pretty( pg_database_size( 'sample_db' ) );
 
+select 'select pg_size_pretty( pg_database_size( '''||datname||''' ) );' from pg_database where datname not in ('postgres','template0','template1') order by datname;
+
 ---------------------------- Таким же макаром можно посмотреть и размер таблицы (с индексами)
 SELECT pg_size_pretty( pg_total_relation_size( 'table' ) );
 
