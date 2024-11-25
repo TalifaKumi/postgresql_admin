@@ -1,0 +1,28 @@
+SELECT nsp.nspname as SchemaName,
+cls.relname as ObjectName,
+rol.rolname as ObjectOwner,
+case cls.relkind
+when 'r' then 'TABLE'
+when 'm' then 'MATERIALIZED_VIEW'
+when 'i' then 'INDEX'
+when 'S' then 'SEQUENCE'
+when 'v' then 'VIEW'
+when 'c' then 'TYPE'
+else cls.relkind::text end as ObjectType
+FROM pg_class cls
+JOIN pg_roles rol ON rol.oid = cls.relowner
+JOIN pg_namespace nsp ON nsp.oid = cls.relnamespace
+WHERE nsp.nspname not in ('information_schema', 'pg_catalog')
+AND nsp.nspname not like 'pg_toast%';
+
+SELECT nsp.nspname as SchemaName,
+cls.relname as ObjectName,
+rol.rolname as ObjectOwner
+FROM pg_class cls
+JOIN pg_roles rol ON rol.oid = cls.relowner
+JOIN pg_namespace nsp ON nsp.oid = cls.relnamespace
+and rol.rolname='etl';
+
+REASSIGN OWNED BY etl TO postgres;  -- some trusted role
+DROP OWNED BY etl;
+drop user etl;
