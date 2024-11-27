@@ -2,7 +2,7 @@
 select count(backend_start) from pg_stat_activity where state='active'  and pid = pg_backend_pid();
 
 ============================= самый старый висящий пользовательский коннект возвращает дату-время не старше now() - 10 мин
-SELECT min(xact_start) FROM pg_stat_activity WHERE state = 'idle in transaction' AND xact_start < NOW() - INTERVAL '10 minutes';
+SELECT min(xact_start) FROM pg_stat_activity WHERE state = 'idle in transaction' AND xact_start < NOW() - INTERVAL '1 minutes';
 select min(xact_start) from pg_stat_activity where state in ('idle in transaction', 'idle in transaction (aborted)';
 
 ============================= блокировки должно возвращать число не больше 0
