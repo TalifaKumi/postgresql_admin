@@ -1,0 +1,40 @@
+
+вот нашла хорошую статью https://habr.com/ru/companies/postgrespro/articles/340978/
+
+alter table crmcnt.contact_persons add column  full_name_tsv tsvector;
+UPDATE crmcnt.contact_persons T set full_name_tsv = to_tsvector(full_name)
+FROM (SELECT id FROM crmcnt.contact_persons WHERE full_name_tsv is null ORDER BY id LIMIT 10000000) S
+WHERE (T.id) = (S.id) and  T. full_name_tsv is null;
+кусками заполняем
+чтоб базу не грузить
+потом индекс делаем
+create index on crmcnt.cp using gin(full_name_tsv);
+сейчас делаю еще одно поле
+UPDATE crmcnt.contact_persons t set full_tsv = to_tsvector(last_name||' '||first_name||' '||middle_name||' '||name||' '||full_name)
+FROM (SELECT id FROM crmcnt.contact_persons WHERE full_tsv is null ORDER BY id LIMIT 100000000) s
+WHERE (t.id) = (s.id) ;
+
+
+EXPLAIN ANALYZE select cp.id as cp_id,
+cp.last_name as cp_last_name,
+cp.first_name as cp_first_name,
+cp.middle_name as cp_middle_name,
+cp.name as cp_name,
+cp.full_name as cp_full_name,
+cp.gender as cp_gender,
+cp.date_birth as cp_date_birth,
+cp.status as cp_status,
+cp.id_gold as cp_id_gold,
+cp.created_at as cp_created_at,
+cp.updated_at as cp_updated_at
+from crmcnt.contact_persons cp
+where cp.status = 'IS_SUBJECT' and (full_name_tsv) @@ to_tsquery('суворовцева & елена');
+QUERY PLAN
+---------------------------------------------------------------------------------------------------------------------------------------------
+Bitmap Heap Scan on contact_persons cp (cost=81.15..379.89 rows=219 width=211) (actual time=0.790..0.790 rows=0 loops=1)
+Recheck Cond: (full_name_tsv @@ to_tsquery('суворовцева & елена'::text))
+Filter: ((status)::text = 'IS_SUBJECT'::text)
+-> Bitmap Index Scan on contact_persons_full_name_tsv_idx (cost=0.00..81.09 rows=219 width=0) (actual time=0.788..0.788 rows=0 loops=1)
+Index Cond: (full_name_tsv @@ to_tsquery('суворовцева & елена'::text))
+Planning Time: 0.166 ms
+Execution Time: 0.812 ms
