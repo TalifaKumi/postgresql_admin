@@ -22,3 +22,12 @@ routine_sequence_usage
 
 grant USAGE ON SCHEMA gitlab_integration to ro_support;
 grant select on all tables in schema gitlab_integration to ro_support;
+
+================
+SELECT nspname FROM pg_catalog.pg_namespace;
+
+select 'grant usage on schema '|| schema_name ||' to teleport-rw;'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+select 'grant all privileges on all tables in schema '|| schema_name ||' to teleport-rw;'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+
+select 'grant usage on schema '|| schema_name ||' to teleport-ro;'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+select 'grant select on all tables in schema '|| schema_name ||' to teleport-ro;'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
