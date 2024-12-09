@@ -10,15 +10,24 @@ ALTER SYSTEM SET autovacuum_analyze_scale_factor = 0.3;
 
 
 ---------------------------------------   кто нуждается в вакууме
-SELECT schemaname, relname, n_tup_ins as "inserts",n_tup_upd as "updates",n_tup_del as "deletes", n_live_tup as "live_tuples", n_dead_tup as "dead_tuples"
+SELECT schemaname, relname, n_tup_ins as "inserts",n_tup_upd as "updates",n_tup_del as "deletes", 
+n_live_tup as "live_tuples", n_dead_tup as "dead_tuples", ( n_dead_tup *100) / n_live_tup "proc"
 FROM pg_stat_user_tables 
 WHERE n_dead_tup <> 0
 order by n_dead_tup desc;
 
 
+SELECT schemaname, relname, n_tup_ins as "inserts",n_tup_upd as "updates",n_tup_del as "deletes", 
+n_live_tup as "live_tuples", n_dead_tup as "dead_tuples", ( n_dead_tup *100) / n_live_tup "proc"
+FROM pg_stat_user_tables 
+WHERE n_dead_tup <> 0
+order by proc desc;
+
+
 SELECT 'VACUUM (VERBOSE, ANALYZE) '||schemaname||'.'||relname||';' FROM pg_stat_user_tables 
 WHERE n_dead_tup <> 0
-order by n_dead_tup  \gexec
+order by n_dead_tup desc limit 7 \gexec
+
 
 
     ===================================================  сколько места занимает
