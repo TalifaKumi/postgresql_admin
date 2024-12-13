@@ -1,0 +1,25 @@
+
+select 'VACUUM (FREEZE, VERBOSE, ANALYZE)  ' || a2.nspname ||  '.' || a2.relname || ';'  AS "VACUUM (FREEZE, VERBOSE, ANALYZE) "
+from (
+SELECT pg_namespace.nspname
+       ,relname
+FROM pg_class c
+JOIN pg_namespace
+                             ON c.relnamespace = pg_namespace.oid
+WHERE c.relkind in ('r', 't', 'm')
+--  AND c.relname ~'pgbench'
+   AND age(relfrozenxid) > (to_number(current_setting('autovacuum_freeze_max_age'), '999999999999')/2)
+ORDER BY age(relfrozenxid) DESC
+limit 15) a2;
+
+select 'VACUUM ( VERBOSE, ANALYZE)  ' || a2.nspname ||  '.' || a2.relname || ';'  AS "VACUUM (FREEZE, VERBOSE, ANALYZE) "
+from (SELECT pg_namespace.nspname
+       ,relname
+      , age(relfrozenxid),(to_number(current_setting('autovacuum_freeze_max_age'), '999999999999')/2)
+FROM pg_class c
+JOIN pg_namespace
+                             ON c.relnamespace = pg_namespace.oid
+WHERE c.relkind in ('r', 't', 'm')
+--  AND c.relname ~'pgbench'
+   AND age(relfrozenxid) > (to_number(current_setting('autovacuum_freeze_max_age'), '999999999999')/2)
+ORDER BY age(relfrozenxid) DESC limit 15) a2;
