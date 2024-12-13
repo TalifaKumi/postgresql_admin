@@ -290,3 +290,444 @@ select pg_indexes.schemaname
            AND ROUND(pg_stat_all_tables.n_tup_upd*100/pg_class.reltuples)::INTEGER < 50
 
       ) al1;
+
+
+\qecho 'Получение команд на проведение VACUUM, FREEZE и ANALYZE индивидуально по таблицам, количество мертвых строк у которых более заданного 200 000'
+\qecho 'https://postgrespro.ru/docs/postgresql/16/sql-vacuum'
+-- Пример
+-- VACUUM (FREEZE, VERBOSE, ANALYZE) name_table;
+
+select 'VACUUM (FREEZE, VERBOSE, ANALYZE)  ' || a2.nspname ||  '.' || a2.relname || ';'  AS "VACUUM (FREEZE, VERBOSE, ANALYZE) "
+from (
+select a1.relname, a1.nspname, a1.main_size, a1.total_size
+     ,to_char(a1.last_vacuumed,'YY-MM-DD HH24:MI:SS') AS "last_vcm"
+     --,to_char(a1.last_analyzed,'YY-MM-DD HH24:MI:SS') AS "last_anl"
+     , a1.cnt_vcm
+     --, a1.cnt_anl
+     , to_char((LOCALTIMESTAMP - a1.last_vacuumed),'YY-MM-DD HH24:MI:SS') AS "d_last_vcm"
+     --, to_char((LOCALTIMESTAMP - a1.last_analyzed),'YY-MM-DD HH24:MI:SS') AS "d_last_anl"
+     --, unnest(reloptions)
+     , n_dead_tup> round(current_setting('autovacuum_vacuum_threshold')::integer + current_setting('autovacuum_vacuum_scale_factor')::float *reltuples) as"need_vcm"
+     , trim(to_char(n_dead_tup,'999 999 999 999'))as "n_dead_tups"
+     , trim(to_char(round(current_setting('autovacuum_vacuum_threshold')::integer + current_setting('autovacuum_vacuum_scale_factor')::float *reltuples),'999 999 999 999')) AS "LevelVcm"
+     , trim(to_char(reltuples,'999 999 999 999')) as "tuples_all"
+     , trim(to_char(n_live_tup,'999 999 999 999')) as "n_live_tups"
+     , trim(to_char(n_tup_ins,'999 999 999 999')) as "n_tups_ins"
+     , trim(to_char(n_tup_upd,'999 999 999 999')) as "n_tups_upd"
+     , trim(to_char(a1.n_mod_since_analyze,'999 999 999 999')) AS "n_mod_since_anl"
+     -- , to_char(a1.n_ins_since_vacuum ,'999 999 999 999') AS "n_ins_since_vcm"
+     , coalesce((SELECT (regexp_matches(reloptions::text, E'.*autovacuum=(\\d+).*'))[1]),current_setting('autovacuum'))::text AS "AutVcm"
+     , coalesce((SELECT (regexp_matches(reloptions::text, E'.*autovacuum_vacuum_threshold=(\\d+).*'))[1]),current_setting('autovacuum_vacuum_threshold'))::real AS "VcmTH"
+     , coalesce((SELECT (regexp_matches(reloptions::text, E'.*autovacuum_vacuum_scale_factor=(\\d+).*'))[1]),current_setting('autovacuum_vacuum_scale_factor'))::real AS "VcmSF"
+     , trim(to_char(a1.size_bt,'999 999 999 999')) as "size_bts"
+from (
+SELECT pg_class.relname
+                    , pg_namespace.nspname
+                    , pg_size_pretty(pg_total_relation_size(pg_class.oid))                         "total_size"
+                    , pg_size_pretty(pg_relation_size(pg_class.oid))                               "main_size"
+                    , CASE
+                          WHEN COALESCE(last_vacuum, '1/1/1000') >
+                               COALESCE(last_autovacuum, '1/1/1000') THEN
+                              pg_stat_all_tables.last_vacuum
+                          ELSE last_autovacuum
+        END                                                                                     AS last_vacuumed
+                    , CASE
+                          WHEN COALESCE(last_analyze, '1/1/1000') >
+                               COALESCE(last_autoanalyze, '1/1/1000') THEN
+                              pg_stat_all_tables.last_analyze
+                          ELSE last_autoanalyze
+        END                                                                                     AS last_analyzed
+                    , (pg_stat_all_tables.autovacuum_count + pg_stat_all_tables.vacuum_count)   AS "cnt_vcm"
+                    , (pg_stat_all_tables.autoanalyze_count + pg_stat_all_tables.analyze_count) AS "cnt_anl"
+                    , pg_stat_all_tables.n_mod_since_analyze
+                    , pg_relation_size(pg_class.oid) AS "size_bt"
+                    , pg_class.reloptions
+                    , pg_class.reltuples
+                    , pg_stat_all_tables.n_live_tup
+                    , pg_stat_all_tables.n_dead_tup
+                    , pg_stat_all_tables.n_tup_ins
+                    , pg_stat_all_tables.n_tup_upd
+               FROM pg_class
+                       JOIN pg_namespace
+                             ON pg_class.relnamespace = pg_namespace.oid
+                        JOIN pg_stat_all_tables
+                             ON (
+                                         pg_class.relname = pg_stat_all_tables.relname
+                                     AND pg_namespace.nspname = pg_stat_all_tables.schemaname
+                                 )
+               WHERE pg_namespace.nspname NOT IN ('pg_toast','pg_catalog','information_schema')
+) a1
+    where size_bt > 1024*1024
+    and n_dead_tup > 200000
+    ORDER BY size_bt DESC
+) a2;
+
+
+
+\qecho 'Получение команд на проведение VACUUM FULL индивидуально по таблицам, размером более 100 Мб и bloat_pct >= 15%'
+\qecho 'Упорядочены по возрастанию размера таблицы'
+\qecho 'https://postgrespro.ru/docs/postgresql/16/sql-vacuum'
+-- Пример
+-- VACUUM (FULL) name_table;
+
+select 'VACUUM (FULL, VERBOSE)  ' || a2.schema ||  '.' || a2.tblname || ';'  AS "VACUUM (FULL) "
+from (
+SELECT s4.current_db
+           , s4.schema
+           , s4.tblname
+           , s4.real_size
+           , pg_size_pretty(s4.real_size::numeric)  as "real_size_pr"
+           , pg_size_pretty(s4.extra_size::numeric) as "extra_size_pr"
+           , s4.extra_pct
+           , s4.fillfactor
+           , pg_size_pretty(s4.bloat_size::numeric) as "bloat_size_pr"
+           , s4.bloat_pct
+           , s4.is_na
+      FROM (SELECT current_database()             as "current_db",
+                   schemaname                     as "schema",
+                   tblname,
+                   bs * tblpages                  AS real_size,
+                   (tblpages - est_tblpages) * bs AS extra_size,
+                   CASE
+                       WHEN tblpages - est_tblpages > 0
+                           THEN round((100 * (tblpages - est_tblpages) / tblpages::float)::numeric, 2)
+                       ELSE 0
+                       END                        AS extra_pct,
+                   fillfactor,
+                   CASE
+                       WHEN tblpages - est_tblpages_ff > 0
+                           THEN (tblpages - est_tblpages_ff) * bs
+                      ELSE 0
+                       END                        AS bloat_size,
+                   CASE
+                       WHEN tblpages - est_tblpages_ff > 0
+                           THEN round((100 * (tblpages - est_tblpages_ff) / tblpages::float)::numeric, 2)
+                       ELSE 0
+                       END                        AS bloat_pct,
+                   is_na
+                   -- , tpl_hdr_size, tpl_data_size, (pst).free_percent + (pst).dead_tuple_percent AS real_frag -- (DEBUG INFO)
+            FROM (SELECT ceil(reltuples / ((bs - page_hdr) / tpl_size)) + ceil(toasttuples / 4) AS est_tblpages,
+                         ceil(reltuples / ((bs - page_hdr) * fillfactor / (tpl_size * 100))) +
+                         ceil(toasttuples / 4)                                                  AS est_tblpages_ff,
+                         tblpages,
+                         fillfactor,
+                         bs,
+                         tblid,
+                         schemaname,
+                         tblname,
+                         heappages,
+                         toastpages,
+                         is_na
+                         -- , tpl_hdr_size, tpl_data_size, pgstattuple(tblid) AS pst -- (DEBUG INFO)
+                  FROM (SELECT (4 + tpl_hdr_size + tpl_data_size + (2 * ma)
+                      - CASE WHEN tpl_hdr_size % ma = 0 THEN ma ELSE tpl_hdr_size % ma END
+                      - CASE WHEN ceil(tpl_data_size)::int % ma = 0 THEN ma ELSE ceil(tpl_data_size)::int % ma END
+                                   )                    AS tpl_size,
+                               bs - page_hdr            AS size_per_block,
+                               (heappages + toastpages) AS tblpages,
+                               heappages,
+                               toastpages,
+                               reltuples,
+                               toasttuples,
+                               bs,
+                               page_hdr,
+                               tblid,
+                               schemaname,
+                               tblname,
+                               fillfactor,
+                               is_na
+                               -- , tpl_hdr_size, tpl_data_size
+                        FROM (SELECT tbl.oid                                                        AS tblid,
+                                     ns.nspname                                                     AS schemaname,
+                                     tbl.relname                                                    AS tblname,
+                                     tbl.reltuples,
+                                     tbl.relpages                                                   AS heappages,
+                                     coalesce(toast.relpages, 0)                                    AS toastpages,
+                                     coalesce(toast.reltuples, 0)                                   AS toasttuples,
+                                     coalesce(substring(
+                                                      array_to_string(tbl.reloptions, ' ')
+                                                      FROM 'fillfactor=([0-9]+)')::smallint,
+                                              100)                                                  AS fillfactor,
+                                     current_setting('block_size')::numeric                         AS bs,
+                                     CASE
+                                         WHEN version() ~ 'mingw32' OR version() ~ '64-bit|x86_64|ppc64|ia64|amd64'
+                                             THEN 8
+                                         ELSE 4 END                                                 AS ma,
+                                     24                                                             AS page_hdr,
+                                     23 + CASE
+                                              WHEN MAX(coalesce(s.null_frac, 0)) > 0 THEN (7 + count(s.attname)) / 8
+                                              ELSE 0::int END
+                                         + CASE
+                                               WHEN bool_or(att.attname = 'oid' and att.attnum < 0) THEN 4
+                                               ELSE 0 END                                           AS tpl_hdr_size,
+                                     sum((1 - coalesce(s.null_frac, 0)) * coalesce(s.avg_width, 0)) AS tpl_data_size,
+                                     bool_or(att.atttypid = 'pg_catalog.name'::regtype)
+                                         OR sum(CASE WHEN att.attnum > 0 THEN 1 ELSE 0 END) <>
+                                            count(s.attname)                                        AS is_na
+                              FROM pg_attribute AS att
+                                       JOIN pg_class AS tbl ON att.attrelid = tbl.oid
+                                       JOIN pg_namespace AS ns ON ns.oid = tbl.relnamespace
+                                       LEFT JOIN pg_stats AS s ON s.schemaname = ns.nspname
+                                  AND s.tablename = tbl.relname AND s.inherited = false AND s.attname = att.attname
+                                       LEFT JOIN pg_class AS toast ON tbl.reltoastrelid = toast.oid
+                              WHERE NOT att.attisdropped
+                                AND tbl.relkind in ('r', 'm')
+                              GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+                              ORDER BY 2, 3) AS s) AS s2) AS s3
+            WHERE 1 = 1
+--     NOT is_na
+--   AND tblpages*((pst).free_percent + (pst).dead_tuple_percent)::float4/100 >= 1
+--   ORDER BY schemaname, tblname
+           ) s4
+     WHERE real_size >= 100 * 1024 * 1024
+        and bloat_pct >= 20
+      -- ORDER BY real_size desc
+      ) a2
+ORDER BY real_size asc
+limit 15
+;
+
+\qecho 'Получение команд на проведение REINDEX INDEX индивидуально по индексам, размером более 10 Мб и bloat_pct >= 15%'
+\qecho 'Упорядочены по возрастанию размера индекса'
+\qecho 'https://postgrespro.ru/docs/postgrespro/16/sql-reindex'
+-- Пример
+-- REINDEX INDEX name_index;;
+
+select 'REINDEX INDEX  ' || a2.schema ||  '.' || a2.idxname || ';'  AS "REINDEX INDEX"
+from (SELECT s1.current_db
+           , s1.schema
+           , s1.tblname
+           , s1.idxname
+           , s1.real_size
+           , pg_size_pretty(s1.real_size::numeric)  as "real_size_pr"
+           , pg_size_pretty(s1.extra_size::numeric) as "extra_size_pr"
+           , s1.extra_pct
+           , s1.fillfactor
+           , pg_size_pretty(s1.bloat_size::numeric) as "bloat_size_pr"
+           , s1.bloat_pct
+           , s1.is_na
+      FROM (SELECT current_database()                                                     as current_db,
+                   nspname                                                                AS schema,
+                   tblname,
+                   idxname,
+                   bs * (relpages)::bigint                                                AS real_size,
+                   bs * (relpages - est_pages)::bigint                                    AS extra_size,
+                   round((100 * (relpages - est_pages)::float / relpages)::numeric, 2)    AS extra_pct,
+                   fillfactor,
+                   CASE
+                       WHEN relpages > est_pages_ff
+                           THEN bs * (relpages - est_pages_ff)
+                       ELSE 0
+                       END                                                                AS bloat_size,
+                   round((100 * (relpages - est_pages_ff)::float / relpages)::numeric, 2) AS bloat_pct,
+                   is_na
+                   -- , 100-(pst).avg_leaf_density AS pst_avg_bloat, est_pages, index_tuple_hdr_bm, maxalign, pagehdr, nulldatawidth, nulldatahdrwidth, reltuples, relpages -- (DEBUG INFO)
+            FROM (SELECT coalesce(1 +
+                                  ceil(reltuples /
+                                       floor((bs - pageopqdata - pagehdr) / (4 + nulldatahdrwidth)::float)),
+                                  0 -- ItemIdData size + computed avg size of a tuple (nulldatahdrwidth)
+                             ) AS est_pages,
+                         coalesce(1 +
+                                  ceil(reltuples / floor((bs - pageopqdata - pagehdr) * fillfactor /
+                                                         (100 * (4 + nulldatahdrwidth)::float))), 0
+                             ) AS est_pages_ff,
+                         bs,
+                        nspname,
+                         tblname,
+                         idxname,
+                         relpages,
+                         fillfactor,
+                         is_na
+                         -- , pgstatindex(idxoid) AS pst, index_tuple_hdr_bm, maxalign, pagehdr, nulldatawidth, nulldatahdrwidth, reltuples -- (DEBUG INFO)
+                  FROM (SELECT maxalign,
+                               bs,
+                               nspname,
+                               tblname,
+                               idxname,
+                               reltuples,
+                               relpages,
+                               idxoid,
+                               fillfactor,
+                               (index_tuple_hdr_bm +
+                                maxalign - CASE -- Add padding to the index tuple header to align on MAXALIGN
+                                               WHEN index_tuple_hdr_bm % maxalign = 0 THEN maxalign
+                                               ELSE index_tuple_hdr_bm % maxalign
+                                    END
+                                    + nulldatawidth + maxalign - CASE -- Add padding to the data to align on MAXALIGN
+                                                                     WHEN nulldatawidth = 0 THEN 0
+                                                                     WHEN nulldatawidth::integer % maxalign = 0
+                                                                    THEN maxalign
+                                                                     ELSE nulldatawidth::integer % maxalign
+                                    END
+                                   )::numeric AS nulldatahdrwidth,
+                               pagehdr,
+                               pageopqdata,
+                               is_na
+                               -- , index_tuple_hdr_bm, nulldatawidth -- (DEBUG INFO)
+                        FROM (SELECT n.nspname,
+                                     i.tblname,
+                                     i.idxname,
+                                     i.reltuples,
+                                     i.relpages,
+                                     i.idxoid,
+                                     i.fillfactor,
+                                     current_setting('block_size')::numeric                            AS bs,
+                                     CASE -- MAXALIGN: 4 on 32bits, 8 on 64bits (and mingw32 ?)
+                                         WHEN version() ~ 'mingw32' OR version() ~ '64-bit|x86_64|ppc64|ia64|amd64'
+                                             THEN 8
+                                         ELSE 4
+                                         END                                                           AS maxalign,
+                                  /* per page header, fixed size: 20 for 7.X, 24 for others */
+                                     24                                                                AS pagehdr,
+                                  /* per page btree opaque data */
+                                     16                                                                AS pageopqdata,
+                                  /* per tuple header: add IndexAttributeBitMapData if some cols are null-able */
+                                     CASE
+                                         WHEN max(coalesce(s.null_frac, 0)) = 0
+                                             THEN 2 -- IndexTupleData size
+                                         ELSE 2 + ((32 + 8 - 1) / 8) -- IndexTupleData size + IndexAttributeBitMapData size ( max num filed per index + 8 - 1 /8)
+                                         END                                                           AS index_tuple_hdr_bm,
+                                  /* data len: we remove null values save space using it fractionnal part from stats */
+                                     sum((1 - coalesce(s.null_frac, 0)) * coalesce(s.avg_width, 1024)) AS nulldatawidth,
+                                     max(CASE WHEN i.atttypid = 'pg_catalog.name'::regtype THEN 1 ELSE 0 END) >
+                                     0                                                                 AS is_na
+                              FROM (SELECT ct.relname                         AS tblname,
+                                           ct.relnamespace,
+                                           ic.idxname,
+                                           ic.attpos,
+                                           ic.indkey,
+                                           ic.indkey[ic.attpos],
+                                           ic.reltuples,
+                                           ic.relpages,
+                                           ic.tbloid,
+                                           ic.idxoid,
+                                           ic.fillfactor,
+                                           coalesce(a1.attnum, a2.attnum)     AS attnum,
+                                           coalesce(a1.attname, a2.attname)   AS attname,
+                                           coalesce(a1.atttypid, a2.atttypid) AS atttypid,
+                                           CASE
+                                               WHEN a1.attnum IS NULL
+                                                   THEN ic.idxname
+                                               ELSE ct.relname
+                                               END                            AS attrelname
+                                    FROM (SELECT idxname,
+                                                 reltuples,
+                                                 relpages,
+                                                 tbloid,
+                                                 idxoid,
+                                                 fillfactor,
+                                                 indkey,
+                                                 pg_catalog.generate_series(1, indnatts) AS attpos
+                                          FROM (SELECT ci.relname                             AS idxname,
+                                                       ci.reltuples,
+                                                       ci.relpages,
+                                                       i.indrelid                             AS tbloid,
+                                                       i.indexrelid                           AS idxoid,
+                                                       coalesce(substring(
+                                                                        array_to_string(ci.reloptions, ' ')
+                                                                        from 'fillfactor=([0-9]+)')::smallint,
+                                                                90)                           AS fillfactor,
+                                                       i.indnatts,
+                                                       pg_catalog.string_to_array(pg_catalog.textin(
+                                                                                          pg_catalog.int2vectorout(i.indkey)),
+                                                                                  ' ')::int[] AS indkey
+                                                FROM pg_catalog.pg_index i
+                                                         JOIN pg_catalog.pg_class ci ON ci.oid = i.indexrelid
+                                                WHERE ci.relam = (SELECT oid FROM pg_am WHERE amname = 'btree')
+                                                  AND ci.relpages > 0) AS idx_data) AS ic
+                                             JOIN pg_catalog.pg_class ct ON ct.oid = ic.tbloid
+                                             LEFT JOIN pg_catalog.pg_attribute a1 ON
+                                                ic.indkey[ic.attpos] <> 0
+                                            AND a1.attrelid = ic.tbloid
+                                            AND a1.attnum = ic.indkey[ic.attpos]
+                                             LEFT JOIN pg_catalog.pg_attribute a2 ON
+                                                ic.indkey[ic.attpos] = 0
+                                            AND a2.attrelid = ic.idxoid
+                                            AND a2.attnum = ic.attpos) i
+                                       JOIN pg_catalog.pg_namespace n ON n.oid = i.relnamespace
+                                       JOIN pg_catalog.pg_stats s ON s.schemaname = n.nspname
+                                  AND s.tablename = i.attrelname
+                                  AND s.attname = i.attname
+                              GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11) AS rows_data_stats) AS rows_hdr_pdg_stats) AS relation_stats
+            ORDER BY nspname, tblname, idxname) s1
+      where s1.real_size >= 10 * 1024 * 1024
+        and s1.bloat_pct >= 15) a2
+ORDER BY real_size asc
+;
+
+
+
+\qecho 'Получение команд на изменение настроек AVTOVACUUM по волатильным таблицам, количество живых строк у которых менее заданного 500 000'
+\qecho 'Рекомендуемый autovacuum_vacuum_threshold определяется как половина живых записей в таблице на момент выполнения запроса'
+\qecho 'Проверьте, что у волатильных  таблиц задан fillfactor = 50'
+\qecho 'https://dataegret.ru/2022/02/vacuuming-update-heavy-tables-rus/'
+-- Пример
+-- ALTER TABLE table_name SET (autovacuum_vacuum_scale_factor = 0, autovacuum_vacuum_threshold = 1000);
+
+select 'ALTER TABLE  ' || a2.nspname ||  '.' || a2.relname || ' SET (autovacuum_vacuum_scale_factor = 0, autovacuum_vacuum_threshold = '|| round((round(a2.n_live_tup,-2))/2) ||');'  AS "autovacuum_vacuum_threshold"
+from (
+select a1.relname, a1.nspname, a1.main_size, a1.total_size
+     ,to_char(a1.last_vacuumed,'YY-MM-DD HH24:MI:SS') AS "last_vcm"
+     --,to_char(a1.last_analyzed,'YY-MM-DD HH24:MI:SS') AS "last_anl"
+     , a1.cnt_vcm
+     --, a1.cnt_anl
+     , to_char((LOCALTIMESTAMP - a1.last_vacuumed),'YY-MM-DD HH24:MI:SS') AS "d_last_vcm"
+     --, to_char((LOCALTIMESTAMP - a1.last_analyzed),'YY-MM-DD HH24:MI:SS') AS "d_last_anl"
+     --, unnest(reloptions)
+     , n_dead_tup> round(current_setting('autovacuum_vacuum_threshold')::integer + current_setting('autovacuum_vacuum_scale_factor')::float *reltuples) as"need_vcm"
+     , trim(to_char(n_dead_tup,'999 999 999 999'))as "n_dead_tups"
+     , trim(to_char(round(current_setting('autovacuum_vacuum_threshold')::integer + current_setting('autovacuum_vacuum_scale_factor')::float *reltuples),'999 999 999 999')) AS "LevelVcm"
+     , trim(to_char(reltuples,'999 999 999 999')) as "tuples_all"
+     ,n_live_tup
+     , trim(to_char(n_live_tup,'999 999 999 999')) as "n_live_tups"
+     , trim(to_char(n_tup_ins,'999 999 999 999')) as "n_tups_ins"
+     , trim(to_char(n_tup_upd,'999 999 999 999')) as "n_tups_upd"
+     , trim(to_char(a1.n_mod_since_analyze,'999 999 999 999')) AS "n_mod_since_anl"
+     -- , to_char(a1.n_ins_since_vacuum ,'999 999 999 999') AS "n_ins_since_vcm"
+     , coalesce((SELECT (regexp_matches(reloptions::text, E'.*autovacuum=(\\d+).*'))[1]),current_setting('autovacuum'))::text AS "AutVcm"
+     , coalesce((SELECT (regexp_matches(reloptions::text, E'.*autovacuum_vacuum_threshold=(\\d+).*'))[1]),current_setting('autovacuum_vacuum_threshold'))::real AS "VcmTH"
+     , coalesce((SELECT (regexp_matches(reloptions::text, E'.*autovacuum_vacuum_scale_factor=(\\d+).*'))[1]),current_setting('autovacuum_vacuum_scale_factor'))::real AS "VcmSF"
+     , trim(to_char(a1.size_bt,'999 999 999 999')) as "size_bts"
+from (
+SELECT pg_class.relname
+                    , pg_namespace.nspname
+                    , pg_size_pretty(pg_total_relation_size(pg_class.oid))                         "total_size"
+                    , pg_size_pretty(pg_relation_size(pg_class.oid))                               "main_size"
+                    , CASE
+                          WHEN COALESCE(last_vacuum, '1/1/1000') >
+                               COALESCE(last_autovacuum, '1/1/1000') THEN
+                              pg_stat_all_tables.last_vacuum
+                          ELSE last_autovacuum
+        END                                                                                     AS last_vacuumed
+                    , CASE
+                          WHEN COALESCE(last_analyze, '1/1/1000') >
+                               COALESCE(last_autoanalyze, '1/1/1000') THEN
+                              pg_stat_all_tables.last_analyze
+                          ELSE last_autoanalyze
+        END                                                                                     AS last_analyzed
+                    , (pg_stat_all_tables.autovacuum_count + pg_stat_all_tables.vacuum_count)   AS "cnt_vcm"
+                    , (pg_stat_all_tables.autoanalyze_count + pg_stat_all_tables.analyze_count) AS "cnt_anl"
+                    , pg_stat_all_tables.n_mod_since_analyze
+                    , pg_relation_size(pg_class.oid) AS "size_bt"
+                    , pg_class.reloptions
+                    , pg_class.reltuples
+                    , pg_stat_all_tables.n_live_tup
+                    , pg_stat_all_tables.n_dead_tup
+                    , pg_stat_all_tables.n_tup_ins
+                    , pg_stat_all_tables.n_tup_upd
+               FROM pg_class
+                        JOIN pg_namespace
+                             ON pg_class.relnamespace = pg_namespace.oid
+                        JOIN pg_stat_all_tables
+                             ON (
+                                         pg_class.relname = pg_stat_all_tables.relname
+                                     AND pg_namespace.nspname = pg_stat_all_tables.schemaname
+                                 )
+               WHERE pg_namespace.nspname NOT IN ('pg_toast','pg_catalog','information_schema')
+) a1
+    where size_bt > 1024*1024
+     and "cnt_vcm" > 50
+     and n_live_tup < 500000
+    ORDER BY "cnt_vcm" DESC
+) a2;
+
