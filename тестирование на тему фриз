@@ -1,0 +1,292 @@
+
+\qecho 'Команды на проведение заморозки VACUUM(FREEZE, VERBOSE, ANALYZE) индивидуально по таблицам, секциям, TOAST таблицам, мат предсталениям у которых горизонт трансакций более половины значения autovacuum_freeze_max_age'
+\qecho 'Отобрано 15 первых'
+\qecho
+
+
+select 'VACUUM (FREEZE, VERBOSE, ANALYZE)  ' || a2.nspname ||  '.' || a2.relname || ';'  AS "VACUUM (FREEZE, VERBOSE, ANALYZE) "
+from (
+SELECT pg_namespace.nspname
+       ,relname
+FROM pg_class c
+JOIN pg_namespace
+                             ON c.relnamespace = pg_namespace.oid
+WHERE c.relkind in ('r', 't', 'm')
+--  AND c.relname ~'pgbench'
+   AND age(relfrozenxid) > (to_number(current_setting('autovacuum_freeze_max_age'), '999999999999')/2)
+ORDER BY age(relfrozenxid) DESC
+limit 15) a2;
+\qecho 'Команды на проведение заморозки VACUUM(FREEZE, VERBOSE, ANALYZE) индивидуально по таблицам, секциям, TOAST таблицам, мат предсталениям у которых горизонт МУЛЬТИтрансакций более половины значения autovacuum_multixact_freeze_max_age'
+\qecho 'Отобрано 15 первых'
+
+select 'VACUUM (FREEZE, VERBOSE, ANALYZE)  ' || a2.nspname ||  '.' || a2.relname || ';'  AS "VACUUM (FREEZE, VERBOSE, ANALYZE) "
+from (
+SELECT LOCALTIMESTAMP(0)
+       -- c.relowner, relnamespace,
+       , pg_namespace.nspname
+       , relname
+       , to_char(to_number(relfrozenxid::text, '999999999999'), '999 999 999 999') as "relfrozenxid"
+       , to_char(txid_current(), '999 999 999 999') as "txid_current"
+       , to_char(to_number(age(relfrozenxid)::text, '999999999999'), '999 999 999 999') AS tx_age
+       , to_char(to_number(current_setting('autovacuum_freeze_max_age')::text,  '999999999999'), '999 999 999 999') as "autovacuum_freeze_max_age"
+       , to_char(to_number(current_setting('autovacuum_freeze_max_age'), '999999999999') - age(relfrozenxid), '999 999 999 999') as "tx_before_avto_freeze"
+       , to_char(to_number(c.relminmxid::text, '999999999999'), '999 999 999 999') as "relminmxid"
+       , to_char(to_number(mxid_age(c.relminmxid)::text, '999999999999'), '999 999 999 999') AS mxid_age
+       , to_char(to_number(current_setting('autovacuum_multixact_freeze_max_age')::text,  '999999999999'), '999 999 999 999') as av_mxid_freeze
+       , to_char(to_number(current_setting('autovacuum_multixact_freeze_max_age'), '999999999999') - mxid_age(relminmxid), '999 999 999 999') as "mx_before_avto_freeze"
+       , pg_stat_get_autovacuum_count(c.oid) + pg_stat_get_vacuum_count(c.oid) AS all_vacuum_count
+       ,to_char(now() - coalesce(
+               pg_stat_get_last_autovacuum_time(c.oid),
+               pg_stat_get_last_vacuum_time(c.oid)
+           ), 'DD HH24:MI:SS:MS')                           AS since_last_vacuum
+       , pg_size_pretty(pg_total_relation_size(c.oid)) as rel_size
+FROM pg_class c
+JOIN pg_namespace
+                             ON c.relnamespace = pg_namespace.oid
+WHERE c.relkind in ('r', 't', 'm')
+--  AND c.relname ~'pgbench'
+   AND mxid_age(relminmxid) > (to_number(current_setting('autovacuum_multixact_freeze_max_age'), '999999999999')/2)
+ORDER BY mxid_age(relminmxid) DESC
+limit 15) a2;
+
+
+
+\qecho 'Команды на установку порога заморозки autovacuum_freeze_min_age = 0  индивидуально по таблицам, по которым только вставки'
+\qecho 'и кол-во UPDATE, DELETE с момента сбора статистики или Кол-во  модифицированных с момента последнего анализа равно 0'
+-- Пример
+-- ALTER TABLE large_append_only SET autovacuum_freeze_min_age = 0;
+
+select 'ALTER TABLE ' || a2.nspname ||  '.' || a2.relname || ' SET autovacuum_freeze_min_age = 0;'  AS "SET_autovacuum_freeze_min_age"
+from (
+select a1.relname
+     , a1.nspname
+     , trim(to_char(n_tup_ins, '999 999 999 999'))                                                                   as "n_tups_ins"
+     , trim(to_char(n_dead_tup, '999 999 999 999'))                                                                  as "n_dead_tups"
+     , trim(to_char(n_tup_upd, '999 999 999 999'))                                                                   as "n_tups_upd"
+     , trim(to_char(a1.n_mod_since_analyze, '999 999 999 999'))                                                      AS "n_mod_since_anl"
+
+     , a1.main_size
+     , a1.total_size
+     , to_char(a1.last_vacuumed, 'YY-MM-DD HH24:MI:SS')                                                              AS "last_vcm"
+     --,to_char(a1.last_analyzed,'YY-MM-DD HH24:MI:SS') AS "last_anl"
+     , a1.cnt_vcm
+     --, a1.cnt_anl
+     , to_char((LOCALTIMESTAMP - a1.last_vacuumed), 'YY-MM-DD HH24:MI:SS')                                           AS "d_last_vcm"
+     --, to_char((LOCALTIMESTAMP - a1.last_analyzed),'YY-MM-DD HH24:MI:SS') AS "d_last_anl"
+     --, unnest(reloptions)
+     , n_dead_tup > round(current_setting('autovacuum_vacuum_threshold')::integer +
+                          current_setting('autovacuum_vacuum_scale_factor')::float *
+                          reltuples)                                                                                 as "need_vcm"
+     , trim(to_char(round(current_setting('autovacuum_vacuum_threshold')::integer +
+                          current_setting('autovacuum_vacuum_scale_factor')::float * reltuples),
+                    '999 999 999 999'))                                                                              AS "LevelVcm"
+     , trim(to_char(reltuples, '999 999 999 999'))                                                                   as "tuples_all"
+        , trim(to_char(n_live_tup, '999 999 999 999'))                                                                  as "n_live_tups"
+     -- , to_char(a1.n_ins_since_vacuum ,'999 999 999 999') AS "n_ins_since_vcm"
+     , coalesce((SELECT (regexp_matches(reloptions::text, E'.*autovacuum=(\\d+).*'))[1]),
+                current_setting('autovacuum'))::text                                                                 AS "AutVcm"
+     , coalesce((SELECT (regexp_matches(reloptions::text, E'.*autovacuum_vacuum_threshold=(\\d+).*'))[1]),
+                current_setting('autovacuum_vacuum_threshold'))::real                                                AS "VcmTH"
+     , coalesce((SELECT (regexp_matches(reloptions::text, E'.*autovacuum_vacuum_scale_factor=(\\d+).*'))[1]),
+                current_setting('autovacuum_vacuum_scale_factor'))::real                                             AS "VcmSF"
+     , trim(to_char(a1.size_bt, '999 999 999 999'))                                                                  as "size_bts"
+from (SELECT pg_class.relname
+           , pg_namespace.nspname
+           , pg_size_pretty(pg_total_relation_size(pg_class.oid))                         "total_size"
+           , pg_size_pretty(pg_relation_size(pg_class.oid))                               "main_size"
+           , CASE
+                 WHEN COALESCE(last_vacuum, '1/1/1000') >
+                      COALESCE(last_autovacuum, '1/1/1000') THEN
+                     pg_stat_all_tables.last_vacuum
+                 ELSE last_autovacuum
+        END                                                                            AS last_vacuumed
+           , CASE
+                 WHEN COALESCE(last_analyze, '1/1/1000') >
+                      COALESCE(last_autoanalyze, '1/1/1000') THEN
+                     pg_stat_all_tables.last_analyze
+                 ELSE last_autoanalyze
+        END                                                                            AS last_analyzed
+           , (pg_stat_all_tables.autovacuum_count + pg_stat_all_tables.vacuum_count)   AS "cnt_vcm"
+           , (pg_stat_all_tables.autoanalyze_count + pg_stat_all_tables.analyze_count) AS "cnt_anl"
+           , pg_stat_all_tables.n_mod_since_analyze
+           , pg_relation_size(pg_class.oid)                                            AS "size_bt"
+           , pg_class.reloptions
+           , pg_class.reltuples
+           , pg_stat_all_tables.n_live_tup
+           , pg_stat_all_tables.n_dead_tup
+           , pg_stat_all_tables.n_tup_ins
+           , pg_stat_all_tables.n_tup_upd
+           
+      FROM pg_class
+               JOIN pg_namespace
+                    ON pg_class.relnamespace = pg_namespace.oid
+               JOIN pg_stat_all_tables
+                    ON (
+                                pg_class.relname = pg_stat_all_tables.relname
+                            AND pg_namespace.nspname = pg_stat_all_tables.schemaname
+                        )
+         --   WHERE pg_namespace.nspname NOT IN ('pg_toast','pg_catalog','information_schema')
+     ) a1
+where n_dead_tup = 0
+  and n_tup_ins > 0
+  and n_tup_upd = 0
+  and n_mod_since_analyze = 0
+  --size_bt > 1024*1024*1024
+ORDER BY n_tup_ins DESC
+LIMIT 20
+) a2;
+
+\qecho 'Команды на изменения fillfactor у таблиц с fillfactor = 100 и '
+\qecho 'Кол-во UPDATE с момента сбора статистики или Кол-во  модифицированных с момента последнего анализа > 50% строк таблицы'
+-- Пример
+-- ALTER TABLE public.act_hi_actinst SET (fillfactor = 50);
+
+select 'ALTER TABLE ' || a1.nspname ||  '.' || a1.relname || ' SET (fillfactor = 50);'  AS "ALTER TABLE SET (fillfactor = 50)"
+from (SELECT pg_class.relname
+                    , pg_namespace.nspname
+                    , pg_size_pretty(pg_total_relation_size(pg_class.oid))                         "total_size"
+                    , pg_size_pretty(pg_relation_size(pg_class.oid))                               "main_size"
+                    , CASE
+                          WHEN COALESCE(last_vacuum, '1/1/1000') >
+                               COALESCE(last_autovacuum, '1/1/1000') THEN
+                              pg_stat_all_tables.last_vacuum
+                          ELSE last_autovacuum
+        END                                                                                     AS last_vacuumed
+                    , CASE
+                          WHEN COALESCE(last_analyze, '1/1/1000') >
+                               COALESCE(last_autoanalyze, '1/1/1000') THEN
+                              pg_stat_all_tables.last_analyze
+                          ELSE last_autoanalyze
+        END                                                                                     AS last_analyzed
+                    , (pg_stat_all_tables.autovacuum_count + pg_stat_all_tables.vacuum_count)   AS "cnt_vcm"
+                    , (pg_stat_all_tables.autoanalyze_count + pg_stat_all_tables.analyze_count) AS "cnt_anl"
+                    , pg_stat_all_tables.n_mod_since_analyze
+                    , pg_relation_size(pg_class.oid) AS "size_bt"
+                    , pg_class.reloptions
+                                       , pg_class.reltuples
+                    , pg_stat_all_tables.n_tup_upd
+                    , pg_stat_all_tables.n_dead_tup
+                    , pg_stat_all_tables.n_tup_ins
+               FROM pg_class
+                        JOIN pg_namespace
+                             ON pg_class.relnamespace = pg_namespace.oid
+                        JOIN pg_stat_all_tables
+                             ON (
+                                         pg_class.relname = pg_stat_all_tables.relname
+                                     AND pg_namespace.nspname = pg_stat_all_tables.schemaname
+                                 )
+               WHERE pg_namespace.nspname NOT IN ('pg_toast','pg_catalog','information_schema')
+) a1
+    where a1.n_tup_upd > 0
+        and a1.reltuples > 0
+        and (round(a1.n_tup_upd*100/reltuples) > 50
+        or round(a1.n_mod_since_analyze*100/reltuples) > 50)
+        and size_bt > 1024*1024
+        and coalesce((SELECT (regexp_matches(reloptions::text, E'.*fillfactor=(\\d+).*'))[1]),'100')::real = 100
+               ORDER BY size_bt DESC;
+
+               \qecho 'Индексы в БД, которым рекомендуется изменить fillfactor на 50 аналогично их таблицам.'
+
+select 'ALTER INDEX ' || schemaname ||  '.' || indexname || ' SET (fillfactor = 50);'  AS "ALTER INDEX SET (fillfactor = 50)"
+from (
+select pg_indexes.schemaname
+           , pg_indexes.indexname
+           , pg_indexes.tablename
+           -- , pg_class.reloptions
+           , coalesce((SELECT (regexp_matches(reloptions::text, E'.*fillfactor=(\\d+).*'))[1]),
+                      '100')::real as "fillfactor"
+           , pg_stat_all_indexes.idx_scan
+           , pg_stat_all_indexes.idx_tup_read
+           , pg_stat_all_indexes.idx_tup_fetch
+      from pg_indexes
+               JOIN pg_class
+                    ON (
+                        pg_class.relname = pg_indexes.tablename
+                        --AND pg_class.relowner = pg_indexes.schemaname
+                        )
+               JOIN pg_stat_all_indexes ON (pg_stat_all_indexes.indexrelname = pg_indexes.indexname
+          AND pg_stat_all_indexes.schemaname = pg_indexes.schemaname
+          )
+                where pg_indexes.tablename IN
+            (select a1.relname
+             from (SELECT pg_class.relname
+                        , pg_namespace.nspname
+                        , pg_size_pretty(pg_total_relation_size(pg_class.oid))                         "total_size"
+                        , pg_size_pretty(pg_relation_size(pg_class.oid))                               "main_size"
+                        , CASE
+                              WHEN COALESCE(last_vacuum, '1/1/1000') >
+                                   COALESCE(last_autovacuum, '1/1/1000') THEN
+                                  pg_stat_all_tables.last_vacuum
+                              ELSE last_autovacuum
+                     END                                                                            AS last_vacuumed
+                        , CASE
+                              WHEN COALESCE(last_analyze, '1/1/1000') >
+                                   COALESCE(last_autoanalyze, '1/1/1000') THEN
+                                  pg_stat_all_tables.last_analyze
+                              ELSE last_autoanalyze
+                     END                                                                            AS last_analyzed
+                        , (pg_stat_all_tables.autovacuum_count + pg_stat_all_tables.vacuum_count)   AS "cnt_vcm"
+                        , (pg_stat_all_tables.autoanalyze_count + pg_stat_all_tables.analyze_count) AS "cnt_anl"
+                        , pg_stat_all_tables.n_mod_since_analyze
+                        , pg_relation_size(pg_class.oid)                                            AS "size_bt"
+                                                , pg_class.reloptions
+                        , pg_class.reltuples
+                        , pg_stat_all_tables.n_tup_upd
+                        , pg_stat_all_tables.n_dead_tup
+                        , pg_stat_all_tables.n_tup_ins
+                   FROM pg_class
+                            JOIN pg_namespace
+                                 ON pg_class.relnamespace = pg_namespace.oid
+                            JOIN pg_stat_all_tables
+                                 ON (
+                                             pg_class.relname = pg_stat_all_tables.relname
+                                         AND pg_namespace.nspname = pg_stat_all_tables.schemaname
+                                     )
+                   WHERE pg_namespace.nspname NOT IN ('pg_toast', 'pg_catalog', 'information_schema')) a1
+             where a1.n_tup_upd > 0
+               and a1.reltuples > 0
+               and (round(a1.n_tup_upd * 100 / reltuples) > 50
+                 or round(a1.n_mod_since_analyze * 100 / reltuples) > 50)
+               and size_bt > 1024 * 1024
+               and coalesce((SELECT (regexp_matches(reloptions::text, E'.*fillfactor=(\\d+).*'))[1]), '100')::real = 100
+             ORDER BY size_bt DESC)
+      ORDER BY pg_indexes.schemaname, pg_indexes.tablename, pg_indexes.indexname
+    ) al2
+;
+
+
+\qecho 'Индексы в БД, которым рекомендуется изменить fillfactor со 100 на 90.'
+
+select 'ALTER INDEX ' || schemaname ||  '.' || indexname || ' SET (fillfactor = 90);'  AS "ALTER INDEX SET (fillfactor = 90)"
+from (
+select pg_indexes.schemaname
+           , pg_indexes.indexname
+           , pg_indexes.tablename
+           , pg_stat_all_tables.n_tup_upd
+           , pg_class.reltuples
+           , ROUND(pg_stat_all_tables.n_tup_upd*100/pg_class.reltuples):: INTEGER AS"%tup_upd"
+           -- , pg_class.reloptions
+           , coalesce((SELECT (regexp_matches(reloptions::text, E'.*fillfactor=(\\d+).*'))[1]),
+                      '100')::real as "fillfactor"
+           , pg_stat_all_indexes.idx_scan
+           , pg_stat_all_indexes.idx_tup_read
+           , pg_stat_all_indexes.idx_tup_fetch
+      from pg_indexes
+               JOIN pg_class
+                    ON (
+                        pg_class.relname = pg_indexes.tablename
+                        --AND pg_class.relowner = pg_indexes.schemaname
+                        )
+               JOIN pg_stat_all_indexes ON (pg_stat_all_indexes.indexrelname = pg_indexes.indexname
+          AND pg_stat_all_indexes.schemaname = pg_indexes.schemaname)
+
+               JOIN pg_stat_all_tables ON (pg_stat_all_tables.relname = pg_indexes.tablename
+          AND pg_stat_all_tables.schemaname = pg_indexes.schemaname)
+               where pg_indexes.schemaname NOT IN ('pg_catalog') -- 'pg_toast','pg_catalog','information_schema'
+           AND coalesce((SELECT (regexp_matches(reloptions::text, E'.*fillfactor=(\\d+).*'))[1]), '100')::real = 100
+           AND pg_stat_all_tables.n_tup_upd > 0
+           AND pg_class.reltuples > 0
+           AND ROUND(pg_stat_all_tables.n_tup_upd*100/pg_class.reltuples)::INTEGER > 10
+           AND ROUND(pg_stat_all_tables.n_tup_upd*100/pg_class.reltuples)::INTEGER < 50
+
+      ) al1;
