@@ -27,7 +27,7 @@ grant select on all tables in schema gitlab_integration to ro_support;
 SELECT nspname FROM pg_catalog.pg_namespace;
 
 select 'grant usage on schema '|| schema_name ||' to teleport_rw;'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
-select 'grant all privileges on all tables in schema '|| schema_name ||' to teleport_rw;'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+select 'grant all privileges  in schema '|| schema_name ||' to teleport_rw;'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
 select 'alter default privileges in schema '|| schema_name ||' grant SELECT, INSERT, UPDATE, DELETE on tables to  teleport_rw;' 
 from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
 
@@ -39,14 +39,13 @@ from information_schema.schemata where schema_name  not in ('pg_toast','pg_catal
 
 --------  revoke
 
-select 'alter default privileges in schema '|| schema_name ||' revoke select on tables from "teleport-ro";' from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+select 'alter default privileges in schema '|| schema_name ||' revoke select on tables from "teleport-rw";' from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+select 'revoke usage on schema '|| schema_name ||' from "teleport-rw";'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+select 'revoke all privileges on all tables in schema '|| schema_name ||' from "teleport-rw";'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
 
-select 'revoke usage on schema '|| schema_name ||' from "teleport-ro";'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
 select 'revoke select on all tables in schema '|| schema_name ||' from "teleport-ro";'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
 
-select 'revoke select on all tables in schema '|| schema_name ||' from "teleport-ro";'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
-
-
+!!!!!!!!!!!!!!!!!!!ALTER DEFAULT PRIVILEGES IN SCHEMA pooler FOR USER "teleport-su" REVOKE ALL ON tables FROM "teleport-ro";
 
 SELECT 
   nspname,         -- schema name
