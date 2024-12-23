@@ -26,13 +26,45 @@ grant select on all tables in schema gitlab_integration to ro_support;
 ================
 SELECT nspname FROM pg_catalog.pg_namespace;
 
-select 'grant usage on schema '|| schema_name ||' to "teleport-rw";'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
-select 'grant all privileges on all tables in schema '|| schema_name ||' to "teleport-rw";'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
-select 'alter default privileges in schema '|| schema_name ||' grant SELECT, INSERT, UPDATE, DELETE on tables to  "teleport-rw";' 
+select 'grant usage on schema '|| schema_name ||' to teleport_rw;'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+select 'grant all privileges on all tables in schema '|| schema_name ||' to teleport_rw;'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+select 'alter default privileges in schema '|| schema_name ||' grant SELECT, INSERT, UPDATE, DELETE on tables to  teleport_rw;' 
 from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
 
 
-select 'grant usage on schema '|| schema_name ||' to "teleport-ro";'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
-select 'grant select on all tables in schema '|| schema_name ||' to "teleport-ro";'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
-select 'alter default privileges in schema '|| schema_name ||' grant select on tables to "teleport-ro";' 
+select 'grant usage on schema '|| schema_name ||' to teleport_ro;'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+select 'grant select on all tables in schema '|| schema_name ||' to teleport_ro;'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+select 'alter default privileges in schema '|| schema_name ||' grant select on tables to teleport_ro;' 
 from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+
+--------  revoke
+
+select 'alter default privileges in schema '|| schema_name ||' revoke select on tables from "teleport-ro";' from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+
+select 'revoke usage on schema '|| schema_name ||' from "teleport-ro";'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+select 'revoke select on all tables in schema '|| schema_name ||' from "teleport-ro";'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+
+select 'revoke select on all tables in schema '|| schema_name ||' from "teleport-ro";'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+
+
+
+SELECT 
+  nspname,         -- schema name
+  defaclobjtype,   -- object type
+  defaclacl        -- default access privileges
+FROM pg_default_acl a JOIN pg_namespace b ON a.defaclnamespace=b.oid;
+
+REVOKE USAGE ,REVOKE CONNECT , REVOKE SELECT
+
+
+----
+
+select 'grant usage on schema '|| schema_name ||' to teleport_rw;'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+select 'grant all privileges on all tables in schema '|| schema_name ||' to teleport_rw;'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+select 'alter default privileges in schema '|| schema_name ||' grant SELECT, INSERT, UPDATE, DELETE on tables to  teleport_rw;' 
+from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+
+select 'alter default privileges in schema '|| schema_name ||' revoke SELECT, INSERT, UPDATE, DELETE on tables to  "teleport_rw;"'  from information_schema.schemata where schema_name  not in ('pg_toast','pg_catalog','information_schema') \gexec
+
+
+
