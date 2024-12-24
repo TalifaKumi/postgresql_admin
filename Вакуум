@@ -14,7 +14,22 @@ SELECT schemaname, relname, n_tup_ins as "inserts",n_tup_upd as "updates",n_tup_
 n_live_tup as "live_tuples", n_dead_tup as "dead_tuples", ( n_dead_tup *100) / n_live_tup "proc"
 FROM pg_stat_user_tables 
 WHERE n_dead_tup <> 0
-order by n_dead_tup desc;
+order by n_dead_tup desc limit 20;
+
+select ' ALTER TABLE  '||a.schemaname||'.'||a.relname||' SET (autovacuum_vacuum_scale_factor = 0.01, autovacuum_analyze_scale_factor = 0.01);' AS "alter"
+from 
+(SELECT schemaname, relname, n_tup_ins as "inserts",n_tup_upd as "updates",n_tup_del as "deletes", 
+n_live_tup as "live_tuples", n_dead_tup as "dead_tuples", ( n_dead_tup *100) / n_live_tup "proc"
+FROM pg_stat_user_tables 
+WHERE n_dead_tup <> 0
+order by n_dead_tup desc limit 10) a;
+
+
+SELECT schemaname, relname, n_tup_ins as "inserts",n_tup_upd as "updates",n_tup_del as "deletes", 
+n_live_tup as "live_tuples", n_dead_tup as "dead_tuples"
+FROM pg_stat_user_tables 
+WHERE n_dead_tup <> 0
+order by n_dead_tup desc limit 20;
 
 
 SELECT schemaname, relname, n_tup_ins as "inserts",n_tup_upd as "updates",n_tup_del as "deletes", 
@@ -26,9 +41,10 @@ order by proc desc;
 
 SELECT 'VACUUM (VERBOSE, ANALYZE) '||schemaname||'.'||relname||';' FROM pg_stat_user_tables 
 WHERE n_dead_tup <> 0
-order by n_dead_tup desc limit 7 \gexec
+order by n_dead_tup desc limit 20 \gexec
 
 
+select * from pg_stat_user_tables where relname ='project_authorizations' \gx
 
     ===================================================  сколько места занимает
     SELECT rolname AS owner,
