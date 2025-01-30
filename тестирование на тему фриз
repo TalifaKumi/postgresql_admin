@@ -493,7 +493,7 @@ limit 15
 -- Пример
 -- REINDEX INDEX name_index;;
 
-select 'REINDEX INDEX  ' || a2.schema ||  '.' || a2.idxname || ';'  AS "REINDEX INDEX"
+select 'REINDEX concurrently INDEX  ' || a2.schema ||  '.' || a2.idxname || ';'  AS "REINDEX INDEX"
 from (SELECT s1.current_db
            , s1.schema
            , s1.tblname
