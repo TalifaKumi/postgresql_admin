@@ -1,4 +1,4 @@
-select  a2.schema ||  '.' || a2.idxname  AS "REINDEX INDEX" , a2.real_size_pr, a2.extra_size_pr, a2.bloat_size_pr
+select  a2.schema ||  '.' || a2.idxname  AS "REINDEX INDEX" , a2.schema ||  '.' || a2.tblname  AS "REINDEX TABLE", a2.real_size_pr, a2.extra_size_pr, a2.bloat_size_pr
 from (SELECT s1.current_db
            , s1.schema
            , s1.tblname
