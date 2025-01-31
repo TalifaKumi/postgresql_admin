@@ -164,7 +164,7 @@ GROUP BY a2.schema , a2.tblname;
 
 
 -------------------------------
-select 'REINDEX concurrently CONCURRENTLY INDEX  ' || a2.schema ||  '.' || a2.idxname || ';'  AS "REINDEX INDEX"
+select 'REINDEX  INDEX  ' || a2.schema ||  '.' || a2.idxname || ';'  AS "REINDEX INDEX"
 from (SELECT s1.current_db
            , s1.schema
            , s1.tblname
