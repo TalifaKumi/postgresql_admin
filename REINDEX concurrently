@@ -1,4 +1,4 @@
-REINDEX TABLE table_name CONCURRENTLY
+
 select 'REINDEX  table  ' || a2.schema ||  '.' || a2.tblname || ' ; analyze ' || a2.schema ||  '.' || a2.tblname ||';' AS "REINDEX"
 from (SELECT s1.current_db
            , s1.schema
