@@ -1,0 +1,19 @@
+select srvname,srvoptions from pg_foreign_server;
+в psql \deu+ или \des+
+------------------------------------------------------------
+
+SELECT distinct um.srvname AS "Server",
+ CASE WHEN umoptions IS NULL THEN '' ELSE   '(' || pg_catalog.array_to_string(ARRAY(SELECT   pg_catalog.quote_ident(option_name) ||  ' ' ||   pg_catalog.quote_literal(option_value)  FROM   pg_catalog.pg_options_to_table(umoptions)),  ', ') || ')'   END AS "FDW options"
+FROM pg_catalog.pg_user_mappings um
+ORDER BY 1, 2;
+
+
+SELECT distinct ' CREATE USER MAPPING FOR "r.galimov" SERVER '||um.srvname ||' OPTIONS '||
+ CASE WHEN umoptions IS NULL THEN '' ELSE   '(' || pg_catalog.array_to_string(ARRAY(SELECT   pg_catalog.quote_ident(option_name) ||  ' ' ||   pg_catalog.quote_literal(option_value)  FROM   pg_catalog.pg_options_to_table(umoptions)),  ', ') || ')'   END ||';'
+FROM pg_catalog.pg_user_mappings um
+ORDER BY 1;
+
+
+SELECT distinct 'GRANT USAGE ON FOREIGN SERVER '||um.srvname ||'  to "r.galimov";'
+FROM pg_catalog.pg_user_mappings um
+ORDER BY 1;
