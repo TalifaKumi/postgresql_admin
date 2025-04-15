@@ -157,8 +157,8 @@ from (SELECT s1.current_db
                               GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11) AS rows_data_stats) AS rows_hdr_pdg_stats) AS relation_stats
             ORDER BY nspname, tblname, idxname) s1
       where s1.real_size >= 10 * 1024 
-        and s1.bloat_pct >= 5 order by s1.real_size) a2
-GROUP BY a2.schema , a2.tblname;
+        and s1.bloat_pct >= 10 order by s1.real_size) a2
+GROUP BY a2.schema , a2.tblname ;
 
 
 
