@@ -1,0 +1,5 @@
+pg_controldata -D /data/postgresql/11/data/
+ - Latest checkpoint's REDO WAL file:    0000000F0000113C0000002F
+May  7 17:12 0000000E0000113C0000002F
+
+pg_archivecleanup /data/postgresql/11/data/pg_wal 0000000E0000113C0000002B
