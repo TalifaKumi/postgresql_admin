@@ -1,0 +1,2 @@
+postgres=# \set ECHO_HIDDEN on
+postgres=# \l
