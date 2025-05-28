@@ -1,0 +1,69 @@
+CREATE VIEW upg_roles_privs AS
+
+    /* Databases */
+    select type, objname, r1.rolname grantor, r2.rolname grantee, privilege_type
+    from
+    (select 
+      'database'::text as type, datname as objname, datistemplate, datallowconn, 
+      (aclexplode(datacl)).grantor as grantorI, 
+      (aclexplode(datacl)).grantee as granteeI,
+      (aclexplode(datacl)).privilege_type,
+      (aclexplode(datacl)).is_grantable
+    from pg_database) as db
+    join pg_roles r1 on db.grantorI = r1.oid
+    join pg_roles r2 on db.granteeI = r2.oid
+    where r2.rolname not in ('postgres')
+
+    union all
+    /* Schemas / Namespaces */
+    select type, objname, r1.rolname grantor, r2.rolname grantee, privilege_type from 
+    (select
+      'schema'::text as type, nspname as objname, 
+      (aclexplode(nspacl)).grantor as grantorI, 
+      (aclexplode(nspacl)).grantee as granteeI,
+      (aclexplode(nspacl)).privilege_type,
+      (aclexplode(nspacl)).is_grantable
+    from pg_catalog.pg_namespace) as ns
+    join pg_roles r1 on ns.grantorI = r1.oid
+    join pg_roles r2 on ns.granteeI = r2.oid
+   where r2.rolname not in ('postgres')
+
+    union all
+    /* Tabelas */
+    select 'tables'::text as type, table_name||' ('||table_schema||')' as objname, grantor, grantee, privilege_type  
+    from information_schema.role_table_grants 
+    where grantee not in ('postgres')
+    and table_schema not in ('information_schema', 'pg_catalog')
+    and grantor <> grantee
+
+    union all
+    /* Colunas (TODO: se o revoke on table from x retirar acesso das colunas, nao precisa desse bloco) */
+    select 
+      'columns'::text as type, column_name||' ('||table_name||')' as objname,
+      grantor, grantee, privilege_type
+    from information_schema.role_column_grants
+    where 
+    table_schema not in ('information_schema', 'pg_catalog')
+    and grantor <> grantee
+
+    union all
+
+    /* Funcoes / Procedures */
+    select 'routine'::text as type, routine_name as objname, grantor, grantee, privilege_type
+    from information_schema.role_routine_grants
+    where grantor <> grantee
+    and routine_schema not in ('information_schema', 'pg_catalog')
+
+    --union all information_schema.role_udt_grants
+
+    union all
+
+    /* Outros objetos */
+
+    select 'object'::text as type, object_name||'( '||object_type||')' as objname, grantor, grantee, privilege_type
+    from information_schema.role_usage_grants
+    where object_type <> 'COLLATION' and object_type <> 'DOMAIN'
+
+SELECT * FROM upg_roles_privs WHERE grantee = 'testuser'
+
+//drop view upg_roles_privs;
