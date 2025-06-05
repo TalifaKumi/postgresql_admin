@@ -63,7 +63,7 @@ FROM (
     FROM (
         SELECT ('"' || table_schema || '"."' || TABLE_NAME || '"') AS TABLE_NAME
         FROM information_schema.tables
-        WHERE table_schema ='edu_power_audit' and TABLE_NAME like '%audit_messages%' 
+        WHERE table_schema ='subject' and TABLE_NAME like 'outbox_event%' 
     ) AS all_tables
     ORDER BY TABLE_NAME
 ) AS pretty_sizes;
