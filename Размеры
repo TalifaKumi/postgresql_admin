@@ -1,6 +1,19 @@
 ---------------------------  Размер базы 
 SELECT pg_size_pretty( pg_database_size( 'sample_db' ) );
 
+SELECT schema_name,
+       round(sum(table_size)/1024/1024) size_MB,
+       round((sum(table_size) / database_size) * 100) proc
+FROM (
+  SELECT pg_catalog.pg_namespace.nspname as schema_name,
+         pg_relation_size(pg_catalog.pg_class.oid) as table_size,
+         sum(pg_relation_size(pg_catalog.pg_class.oid)) over () as database_size
+  FROM   pg_catalog.pg_class
+     JOIN pg_catalog.pg_namespace ON relnamespace = pg_catalog.pg_namespace.oid
+) t
+GROUP BY schema_name, database_size order by 2 desc;
+
+
 select 'select pg_size_pretty( pg_database_size( '''||datname||''' ) );' from pg_database where datname not in ('postgres','template0','template1') order by datname;
 
 ---------------------------- Таким же макаром можно посмотреть и размер таблицы (с индексами)
