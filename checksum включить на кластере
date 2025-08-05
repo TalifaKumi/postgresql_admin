@@ -1,0 +1,8 @@
+
+погасить все вервисы
+/usr/pgsql-15/bin/pg_checksums --pgdata /data/patroni --enable
+(или --disable, если нужно выключить эту функцию).
+Запустить службу postgresql.service.
+
+
+/usr/local/bin/patronictl -c /opt/app/patroni/etc/patroni.yaml reinit для реплик
