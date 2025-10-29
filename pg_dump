@@ -13,4 +13,7 @@ postgres=#  ALTER DATABASE grafana rename to grafana_1;
 
 CREATE DATABASE grafana WITH TEMPLATE = template0 ENCODING = 'UTF8' LC_COLLATE = 'en_US.UTF-8' LC_CTYPE = 'en_US.UTF-8';
 pg_restore -d grafana dump_grafana.sql
+===============
+
+pg_dump -U postgres postgres | gzip -c " > ump-user-service-pg_dump.sql.gz
 
