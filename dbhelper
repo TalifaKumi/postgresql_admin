@@ -1,0 +1,69 @@
+cat /var/lib/pgsql/dbhelper.sh
+#!/bin/sh
+cd /data
+
+# DataBase Helper script for Patroni cluster
+# Get OS info
+OS=$(grep PRETTY /etc/os-release | sed -e 's/PRETTY_NAME="//' -e 's/"//')
+# Get uptime
+UPTIME=$(uptime | awk -F'( |,|:)+' '{print $6,$7",",$8,"hours,",$9,"minutes."}')
+
+### Output ###
+echo ''
+echo -e '\033[44m=====DataBase Helper for PostgreSQL=====\033[0m'
+echo ''
+echo -e '\033[44m# OS information:\033[0m'
+echo -e 'Operating system---------------' ${OS}
+echo -e 'Hostname-----------------------' ${HOSTNAME}
+echo -e 'This system works--------------' ${UPTIME}
+echo -e 'Patroni config file------------' /opt/app/patroni/etc/patroni.yaml
+echo ''
+echo -e '\033[44m# VIP manager information:\033[0m'
+systemctl status vip-manager > /dev/null
+    if [ $? -eq 0 ]
+    then
+        echo -e 'VIP manager is active!'
+        echo -e 'VIP is' $(cat /etc/patroni/vip-manager.yml | grep ip: | awk '{print $2}')
+    else
+        echo -e 'VIP manager is dead :('
+    fi
+echo ''
+
+echo -e '\033[44m# PostgreSQL information:\033[0m'
+systemctl status patroni > /dev/null
+    if [ $? -eq 0 ]
+    then
+        patronictl -c /opt/app/patroni/etc/patroni.yaml list
+        echo -e 'Patroni cluster name-----------' $(patronictl list -e | grep Cluster | awk '{print $3}')
+        echo -e 'Patroni version----------------' $(patronictl version | awk '{print $3}')
+        echo -e 'PostgreSQL version-------------' $(postgres -V | awk '{print $3}')
+        echo -e 'Cluster uptime-----------------' $(psql -t -c "SELECT now()-pg_postmaster_start_time();" | sed 's/:[^:]*//2g')
+        echo -e 'Data directory-----------------' $(psql -t -c "SHOW data_directory;")
+        echo -e 'PostgreSQL logfile directory---' $(psql -t -c "SHOW log_directory;")
+        echo -e 'Patroni logfile directory------' $(cat $(cat /lib/systemd/system/patroni.service | grep PATRONI_CONFIG_LOCATION= | awk -F"=" 'NR==2{print $3}') | grep log| awk 'NR==2{print $2}')
+        echo -e 'Patroni conffile directory-----' $(cat /lib/systemd/system/patroni.service | grep PATRONI_CONFIG_LOCATION= | awk -F"=" 'NR==2{print $3}')
+        echo -e 'Cluster port-------------------' ${PGPORT}
+    else
+        echo -e 'Cluster name' $(echo $env_file | cut -d '/' --output-delimiter=" " -f 1- | awk '{print $NF}' | cut -d '.' -f 1) 'is offline'
+    fi
+echo ''echo -e '\033[44m# Odyssey information:\033[0m'
+systemctl status odyssey > /dev/null
+    if [ $? -eq 0 ]
+    then
+        echo -e 'Odyssey is active!'
+        echo -e 'Odyssey port-------------------' $(cat /opt/odyssey/odyssey.conf | grep port | awk 'NR==1{print $2}')
+        echo -e 'Odyssey logfile directory------' $(cat /opt/odyssey/odyssey.conf | grep log_file | awk '{print $2}' | tr -d '"')
+    else
+        echo -e 'Odyssey is dead :('
+    fi
+echo ''
+
+echo -e '\033[44m# ETCD information:\033[0m'
+/opt/etcd/bin/etcdctl -w table endpoint --cluster status
+#/opt/etcd/bin/etcdctl endpoint status --write-out=table --endpoints=http://10.230.17.88:2379,http://10.230.17.89:2379,http://10.230.17.90:2379
+echo ''
+
+echo -e '\033[44m# HaProxy information:\033[0m'
+echo "show stat" | nc -U /var/lib/haproxy/stats | cut -d "," -f 1,2,18,24,27,30,36,50,37,56,57,62 | column -s, -t
+echo ''
+
