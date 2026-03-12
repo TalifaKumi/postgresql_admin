@@ -68,6 +68,23 @@ echo "show stat" | nc -U /var/lib/haproxy/stats | cut -d "," -f 1,2,18,24,27,30,
 echo ''
 
 ============================================================ cat dbhelper.sh  
+
+# DataBase Helper script
+# Get OS info
+OS=$(grep PRETTY /etc/os-release | sed -e 's/PRETTY_NAME="//' -e 's/"//')
+# Get uptime
+UPTIME=$(uptime | awk -F'( |,|:)+' '{print $6,$7",",$8,"hours,",$9,"minutes."}')
+
+### Output ###
+echo ''
+echo -e '\033[44m=====DataBase Helper for PostgreSQL=====\033[0m'
+echo ''
+echo -e '\033[44m# OS information:\033[0m'
+echo -e 'Operating system---------------' ${OS}
+echo -e 'Hostname-----------------------' ${HOSTNAME}
+echo -e 'This system works--------------' ${UPTIME}
+echo ''
+
 echo -e '\033[44m# PostgreSQL information:\033[0m'
         echo -e 'PostgreSQL version-------------' $(postgres -V | awk '{print $3}')
         echo -e 'PostgreSQL uptime--------------' $(psql -t -c "SELECT now()-pg_postmaster_start_time();" | sed 's/:[^:]*//2g')
