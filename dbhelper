@@ -67,3 +67,14 @@ echo -e '\033[44m# HaProxy information:\033[0m'
 echo "show stat" | nc -U /var/lib/haproxy/stats | cut -d "," -f 1,2,18,24,27,30,36,50,37,56,57,62 | column -s, -t
 echo ''
 
+============================================================ cat dbhelper.sh  
+echo -e '\033[44m# PostgreSQL information:\033[0m'
+        echo -e 'PostgreSQL version-------------' $(postgres -V | awk '{print $3}')
+        echo -e 'PostgreSQL uptime--------------' $(psql -t -c "SELECT now()-pg_postmaster_start_time();" | sed 's/:[^:]*//2g')
+        echo -e 'PostgreSQL replica-------------' $(psql -t -c "SELECT CASE WHEN pg_is_in_recovery() = 'f' THEN 'Master'  WHEN pg_is_in_recovery() = 't' THEN 'Replica'  ELSE 'Unknown' END;")
+        echo -e 'Data directory-----------------' $(psql -t -c "SHOW data_directory;")
+        echo -e 'PostgreSQL logfile directory---' $(psql -t -c "SHOW log_directory;")
+        echo -e 'PostgreSQL max connections-----' $(psql -t -c "SHOW max_connections;")
+        echo -e 'PostgreSQL connections---------' $(psql -t -c "SELECT count(*) from pg_stat_activity;")
+
+
