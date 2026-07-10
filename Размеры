@@ -1,6 +1,9 @@
 ---------------------------  Размер базы 
 SELECT pg_size_pretty( pg_database_size( 'sample_db' ) );
 
+select 'SELECT pg_size_pretty(pg_database_size( '''||datname||''' ));' from pg_database
+where datname not in ('postgres','template1','template0');
+
 SELECT schema_name,
        round(sum(table_size)/1024/1024) size_MB,
        round((sum(table_size) / database_size) * 100) proc
