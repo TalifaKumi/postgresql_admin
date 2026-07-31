@@ -1,3 +1,13 @@
+SELECT 
+    r.rolname AS username,
+    array_agg(m.rolname) AS member_of
+FROM pg_roles r
+LEFT JOIN pg_auth_members am ON am.member = r.oid
+LEFT JOIN pg_roles m ON m.oid = am.roleid
+GROUP BY r.rolname
+ORDER BY r.rolname;
+
+
 WITH rol AS (
     SELECT oid,
             rolname::text AS role_name
