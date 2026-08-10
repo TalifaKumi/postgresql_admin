@@ -1,0 +1,262 @@
+
+открыть 4 вкладки
+3 под рутом
+1 посгрес, но не ВИП
+
+
+-----------------  postgres на всех
+cp  ~/.bash_profile  ~/.bash_profile.old
+СДЕЛАТЬ СНИМКИ
+
+-----------------  root
+PG=17
+pg=5
+PG_OLD=15
+export PGPORT=6432
+
+OS=$(cat /etc/*release | grep -oP "(?<=^VERSION=\")\K\d+(?=.*\")")
+ 
+echo -e "\
+[pgdg$PG-non-free]
+async = 1
+baseurl = http://binary.alfabank.ru/artifactory/postgresqlyum/non-free/$PG/redhat/rhel-$OS-\$basearch
+enabled = 1
+gpgcheck = 0
+name = PostgreSQL $PG non-free RPMs for RHEL/CentOS $OS - \$basearch"\
+| sudo tee /etc/yum.repos.d/pgdg$PG-non-free.repo
+echo -e "\
+[pgdg$PG]
+async = 1
+baseurl = http://binary.alfabank.ru/artifactory/postgresqlyum/$PG/redhat/rhel-$OS-\$basearch
+enabled = 1
+gpgcheck = 0
+name = PostgreSQL $PG for RHEL/CentOS $OS - \$basearch"\
+| sudo tee /etc/yum.repos.d/pgdg$PG.repo
+ 
+echo -e "\
+[postgres$PG]
+async = 1
+baseurl = https://binary.alfabank.ru/artifactory/yum-postgresql/pub/repos/yum/$PG/redhat/rhel-\$releasever-\$basearch/
+enabled = 1
+gpgcheck = 0
+name = postgres$PG repo
+module_hotfixes=1"\
+| sudo tee /etc/yum.repos.d/postgres$PG.repo
+
+if [[ ! -f /etc/yum.repos.d/pgdg-common.repo ]]; then
+echo -e "\
+[pgdg-common]
+async = 1
+baseurl = http://binary.alfabank.ru/artifactory/postgresqlyum/common/redhat/rhel-$OS-\$basearch
+enabled = 1
+gpgcheck = 0
+name = PostgreSQL common RPMs for RHEL/CentOS $OS - \$basearch"\
+| sudo tee /etc/yum.repos.d/pgdg-common.repo
+fi
+
+--------------------------------------
+REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA pg_catalog FROM whatsup;
+drop extension pg_repack;
+--GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA pg_catalog TO whatsup;
+
+----------------------------  sudo
+cat >> /etc/sudoers << EOF
+postgres ALL=(ALL) NOPASSWD: ALL
+EOF
+
+------------------------  инсталл 17, сносит баш профиль на всех, под root
+
+PG=17
+pg=5
+PG_OLD=15
+export PGPORT=6432
+
+sudo yum install -y postgresql$PG-$PG.$pg postgresql$PG-contrib-$PG.$pg postgresql$PG-devel-$PG.$pg postgresql$PG-libs-$PG.$pg postgresql$PG-server-$PG.$pg \
+pg_cron_$PG pg_stat_kcache_$PG pg_wait_sampling_$PG system_stats_$PG
+
+
+-------------------  тест апгрейта на одной ведущей под postgres
+cd /tmp/
+PG=17
+pg=5
+PG_OLD=15
+export PGPORT=6432
+
+sudo chown -R postgres:postgres /data/
+sudo -u postgres mkdir /data/patroni.new \
+&& sudo -u postgres /usr/pgsql-$PG/bin/initdb -kD /data/patroni.new \
+&& sudo -u postgres cp /data/patroni/postgresql.conf /data/patroni/postgresql.base.conf /data/patroni/postgresql.auto.conf /data/patroni.new/ \
+&& sudo -u postgres /usr/pgsql-$PG/bin/pg_upgrade -b /usr/pgsql-$PG_OLD/bin/ -d /data/patroni/ -D /data/patroni.new/ -k -c \
+&& sudo rm -rf /data/patroni.new
+
+
+---------------------   на всех нодах с конца под root
+sudo systemctl stop patroni.service
+sudo chown -R postgres:postgres /data/
+
+------------  под простгрес на одной ведущей
+mv /data/patroni /data/patroni.old && mkdir /data/patroni
+
+PG=17
+pg=5
+PG_OLD=15
+export PGPORT=6432
+
+/usr/pgsql-$PG/bin/initdb -kD /data/patroni \
+&& cp /data/patroni.old/postgresql.conf /data/patroni.old/postgresql.base.conf /data/patroni.old/postgresql.auto.conf /data/patroni/
+
+PG=17
+pg=5
+PG_OLD=15
+export PGPORT=6432
+PATRONI_CLUSTER=opp
+
+cd /data
+/usr/pgsql-$PG/bin/pg_upgrade -b /usr/pgsql-$PG_OLD/bin/ -d /data/patroni.old/ -D /data/patroni/ -k
+
+
+=====================  если откат
+pg_restore: creating ACL "pg_catalog.FUNCTION "internal_out"("internal")"
+pg_restore: creating ACL "pg_catalog.FUNCTION "interval"(time without time zone)"
+pg_restore: creating ACL "pg_catalog.FUNCTION "interval"(interval, integer)"
+pg_restore: creating ACL "pg_catalog.FUNCTION "interval_accum"(interval[], interval)"
+pg_restore: while PROCESSING TOC:
+pg_restore: from TOC entry 9909; 0 0 ACL FUNCTION "interval_accum"(interval[], interval) postgres
+pg_restore: error: could not execute query: ERROR:  function pg_catalog.interval_accum(interval[], interval) does not exist
+Command was: GRANT ALL ON FUNCTION "pg_catalog"."interval_accum"(interval[], interval) TO "whatsup";
+
+-- cp  ~/.bash_profile.old  ~/.bash_profile
+-- rm -rf /data/patroni
+-- mv /data/patroni.old /data/patroni
+
+sudo systemctl start patroni.service
+
+======================  конец отката
+
+---------------------  под postgres на одной ведущей 
+PG=17
+pg=5
+PG_OLD=15
+export PGPORT=6432
+PATRONI_CLUSTER=opp
+
+
+sed -i "s/\/usr\/pgsql-$PG_OLD\/bin/\/usr\/pgsql-$PG\/bin/" /opt/app/patroni/etc/patroni.yaml
+
+/usr/local/bin/patronictl -c /opt/app/patroni/etc/patroni.yaml remove $PATRONI_CLUSTER <<EOF
+$PATRONI_CLUSTER
+Yes I am aware
+EOF
+
+cp /data/patroni.old/patroni.dynamic.json /data/patroni/patroni.dynamic.json
+cp /data/patroni.old/pg_hba.conf /data/patroni/pg_hba.conf
+sudo systemctl start patroni.service
+
+
+
+PG=17
+pg=5
+PG_OLD=15
+export PGPORT=6432
+PATRONI_CLUSTER=opp
+
+/usr/local/bin/patronictl -c /opt/app/patroni/etc/patroni.yaml edit-config $PATRONI_CLUSTER --apply /data/patroni.old/patroni.dynamic.json && /usr/local/bin/patronictl -c /opt/app/patroni/etc/patroni.yaml restart $PATRONI_CLUSTER --force
+
+
+---------------------- под пользователем Postgres vi ~/.bash_profile на всех
+
+[ -f /etc/profile ] && source /etc/profile
+[ -f /var/lib/pgsql/.pgsql_profile ] && source /var/lib/pgsql/.pgsql_profile
+LD_LIBRARY_PATH=/usr/pgsql-17/bin
+export LD_LIBRARY_PATH
+PATH=/usr/pgsql-17/bin:$PATH
+export PATH
+PGDATA=/data/patroni
+export PGDATA
+PGPORT=6432
+export PGPORT
+PATRONICTL_CONFIG_FILE=/opt/app/patroni/etc/patroni.yaml
+export PATRONICTL_CONFIG_FILE
+sh /var/lib/pgsql/dbhelper.sh
+
+Прогрузить source ~/.bash_profile
+
+----------------------------------------- под postgres на одной ведущей
+
+psql -c "drop extension pg_stat_statements cascade; create extension pg_stat_kcache cascade;" && psql -f /data/update_extensions.sql
+
+-- REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA pg_catalog FROM whatsup;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA pg_catalog TO whatsup;
+
+
+/usr/pgsql-17/bin/vacuumdb --all --analyze-in-stages
+------------------------------------  ошибки в логах
+postgres_exporter
+
+
+
+---------------------------------------  другие ноды
+sudo rm -rf /data/patroni
+sudo chown -R postgres:postgres /data/
+
+PG=17
+pg=5
+PG_OLD=15
+export PGPORT=6432
+PATRONI_CLUSTER=opp
+
+
+sudo -u postgres sed -i "s/\/usr\/pgsql-$PG_OLD\/bin/\/usr\/pgsql-$PG\/bin/" /opt/app/patroni/etc/patroni.yaml  
+
+
+
+sudo systemctl start patroni.service
+
+-----------  если не идет реплика
+INFO: trying to bootstrap from leader  
+Error when fetching backup: pg_basebackup exited with code=1
+
+pg_basebackup -h vsfacomdbpl3 -D /data/patroni
+
+----------------------------------
+
+    ./delete_old_cluster.sh
+
+
+BACKUP!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+МОНИТОР!!!
+sudo mv  /usr/pgsql-15  /usr/pgsql-15.old
+sudo yum versionlock add postgresql17-17.9-1PGDG.rhel8.10 postgresql17-contrib-17.9-1PGDG.rhel8.10 postgresql17-devel-17.9-1PGDG.rhel8.10 postgresql17-libs-17.9-1PGDG.rhel8.10 postgresql17-server-17.9-1PGDG.rhel8.10
+чтоб убрать алерт нижний с забикса
+
+comm -23 <(yum list installed 2>/dev/null | grep -E '^(postgresql|odyssey|pgbouncer|haproxy|vip-manager|patroni|etcd)' | grep -Ev 'libpq|plpgsql|postgresql-rpm-generators' | awk '{split($1,a,"."); print a[1]"-"$2}' | sed -E 's/-[0-9]+:/-/g' | sort) <(yum --cacheonly versionlock list 2>/dev/null | sed -E 's/-[0-9]+:/-/g; s/\.\*$//g' | sort)
+
+
+sudo yum versionlock add postgresql17-17.5-3PGDG.rhel8
+sudo yum versionlock add postgresql17-contrib-17.5-3PGDG.rhel8
+sudo yum versionlock add postgresql17-devel-17.5-3PGDG.rhel8
+sudo yum versionlock add postgresql17-libs-17.5-3PGDG.rhel8
+sudo yum versionlock add postgresql17-server-17.5-3PGDG.rhel8
+------------------------
+
+select profile.take_sample();  --Ошибка Server system_identifier has changed!
+select profile.show_servers();
+
+table profile.servers;   -- Выводим инфу по текущей настройке
+
+\copy (select * from profile.export_data()) to '/путь/export.csv' -- Для сохранения статистики
+
+
+select profile.drop_server('vsfasbdbn1');
+
+в host= вместо имени указываем ip  адрес, иначе мониторинг пгпрофайла будет алертить
+
+SELECT profile.create_server('vsfaoppdbn1','host=10.230.88.179 dbname=postgres password=profile_mon user=profile_mon port=6432', true, 30, null);
+GRANT EXECUTE ON FUNCTION pg_stat_kcache_reset TO profile_mon;
+
+GRANT EXECUTE ON FUNCTION pg_stat_statements_reset TO profile_mon;
+
+select profile.take_sample();
+
+не всегда срабатывает: 
+UPDATE profile.sample_settings SET (setting,reset_val,boot_val) =(SELECT system_identifier,system_identifier,system_identifier FROM pg_control_system()) where name='system_identifier';
