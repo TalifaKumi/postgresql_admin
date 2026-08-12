@@ -1,0 +1,47 @@
+------------------------------------------------   дублирующие индексы
+SELECT
+    t.relname                               AS table_name,
+    ix1.indexrelid::regclass                AS index1,
+    ix2.indexrelid::regclass                AS index2,
+    array_agg(a1.attname ORDER BY x1.ordinality) AS cols1,
+    array_agg(a2.attname ORDER BY x2.ordinality) AS cols2
+FROM pg_index ix1
+JOIN pg_index ix2 ON ix1.indrelid = ix2.indrelid
+    AND ix1.indexrelid < ix2.indexrelid
+JOIN pg_class t ON t.oid = ix1.indrelid
+CROSS JOIN LATERAL unnest(ix1.indkey) WITH ORDINALITY AS x1(attnum, ordinality)
+CROSS JOIN LATERAL unnest(ix2.indkey) WITH ORDINALITY AS x2(attnum, ordinality)
+JOIN pg_attribute a1 ON a1.attrelid = ix1.indrelid AND a1.attnum = x1.attnum
+JOIN pg_attribute a2 ON a2.attrelid = ix2.indrelid AND a2.attnum = x2.attnum
+GROUP BY t.relname, ix1.indexrelid, ix2.indexrelid
+HAVING array_agg(a1.attname ORDER BY x1.ordinality)[1:1]
+     = array_agg(a2.attname ORDER BY x2.ordinality)[1:1];
+
+----------------------------- неиспользуемые индексы
+SELECT
+    schemaname,
+    relname                                    AS table_name,
+    indexrelname                               AS index_name,
+    idx_scan                                   AS scans,
+    pg_size_pretty(pg_relation_size(indexrelid)) AS index_size
+FROM pg_stat_user_indexes
+JOIN pg_index USING (indexrelid)
+WHERE idx_scan = 0
+  AND NOT indisprimary      -- не первичный ключ
+  AND NOT indisunique       -- не уникальный ограничитель
+ORDER BY pg_relation_size(indexrelid) DESC;
+
+------------------------------------- индекс bload
+SELECT
+    schemaname,
+    relname         AS table_name,
+    indexrelname    AS index_name,
+    pg_size_pretty(pg_relation_size(indexrelid)) AS index_size,
+    idx_scan,
+    idx_tup_read,
+    idx_tup_fetch
+FROM pg_stat_user_indexes
+ORDER BY pg_relation_size(indexrelid) DESC
+LIMIT 20;
+
+-------------------------------------------
