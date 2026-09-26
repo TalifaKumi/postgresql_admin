@@ -1,0 +1,232 @@
+WITH tbl AS (
+    SELECT
+        c.oid,
+        c.relname,
+        c.relpages,
+        c.reltoastrelid
+    FROM pg_class c
+    JOIN pg_namespace n
+      ON n.oid = c.relnamespace
+    WHERE n.nspname = 'knd'
+      AND c.relkind = 'r'
+-- Только Mongo-подобные таблицы _id + content
+      AND EXISTS (
+          SELECT 1
+          FROM pg_attribute a
+          WHERE a.attrelid = c.oid
+            AND a.attname = '_id'
+            AND a.attnum > 0
+            AND NOT a.attisdropped
+      )
+      AND EXISTS (
+          SELECT 1
+          FROM pg_attribute a
+          WHERE a.attrelid = c.oid
+            AND a.attname = 'content'
+            AND a.attnum > 0
+            AND NOT a.attisdropped
+      )
+),
+idx AS (
+    SELECT
+        i.indrelid AS table_oid,
+        i.indexrelid,
+        ic.relname AS index_name,
+        am.amname AS index_type,
+        i.indisprimary,
+        i.indisvalid,
+        i.indisready,
+        pg_get_expr(
+            i.indexprs,
+            i.indrelid
+        ) AS index_expr,
+        pg_get_indexdef(
+            i.indexrelid
+        ) AS index_def,
+        ic.relpages::bigint *
+        current_setting('block_size')::bigint
+            AS approx_index_bytes
+    FROM pg_index i
+    JOIN pg_class ic
+      ON ic.oid = i.indexrelid
+    JOIN pg_am am
+      ON am.oid = ic.relam
+),
+agg AS (
+    SELECT
+        t.oid,
+        t.relname,
+        t.relpages,
+        max(
+            CASE
+                WHEN i.indisvalid
+                 AND i.indisready
+                 AND i.indisprimary
+                THEN 1 ELSE 0
+            END
+        ) AS pk,
+        max(
+            CASE
+                WHEN i.indisvalid
+                 AND i.indisready
+                 AND i.index_type = 'btree'
+                 AND i.index_expr LIKE '%{guid}%'
+                THEN 1 ELSE 0
+            END
+        ) AS guid,
+        max(
+            CASE
+                WHEN i.indisvalid
+                 AND i.indisready
+                 AND i.index_type = 'btree'
+                 AND i.index_expr LIKE '%{dateLastModification}%'
+                THEN 1 ELSE 0
+            END
+        ) AS date_mod,
+        max(
+            CASE
+                WHEN i.indisvalid
+                 AND i.indisready
+                 AND i.index_type = 'gin'
+                 AND i.index_def ~ 'USING gin \(content\)'
+                THEN 1 ELSE 0
+            END
+        ) AS gin,
+        count(i.indexrelid) FILTER (
+            WHERE NOT i.indisvalid
+               OR NOT i.indisready
+        ) AS invalid_or_not_ready,
+        COALESCE(
+            sum(i.approx_index_bytes) FILTER (
+                WHERE i.indisvalid
+                  AND i.indisready
+            ),
+            0
+        ) AS approx_index_bytes
+
+    FROM tbl t
+    LEFT JOIN idx i
+      ON i.table_oid = t.oid
+    GROUP BY
+        t.oid,
+        t.relname,
+        t.relpages
+),
+progress AS (
+    SELECT
+        p.relid,
+        p.pid,
+        p.command,
+        p.phase,
+        p.blocks_done,
+        p.blocks_total,
+        CASE
+            WHEN p.blocks_total > 0
+            THEN round(
+                100.0 * p.blocks_done /
+                p.blocks_total,
+                1
+            )
+        END AS blocks_pct,
+        p.tuples_done,
+        p.tuples_total,
+        CASE
+            WHEN p.tuples_total > 0
+            THEN round(
+                100.0 * p.tuples_done /
+                p.tuples_total,
+                1
+            )
+        END AS tuples_pct
+    FROM pg_stat_progress_create_index p
+)
+SELECT
+    a.relname AS table_name,
+   (
+        a.pk +
+        a.guid +
+        a.date_mod +
+        a.gin
+    )::text || '/4' AS status,
+    a.pk,
+    a.guid,
+    a.date_mod,
+    a.gin,
+    a.invalid_or_not_ready AS bad,
+    pg_size_pretty(
+        a.relpages::bigint *
+        current_setting('block_size')::bigint
+    ) AS approx_heap,
+    pg_size_pretty(
+        a.approx_index_bytes
+    ) AS approx_indexes,
+    p.pid AS build_pid,
+    p.command,
+    p.phase,
+    p.blocks_pct,
+    p.tuples_pct
+FROM agg a
+LEFT JOIN progress p
+  ON p.relid = a.oid
+ORDER BY
+    (p.pid IS NOT NULL) DESC,
+    (
+        a.pk +
+        a.guid +
+        a.date_mod +
+        a.gin
+    ) ASC,
+    a.relpages DESC,
+    a.relname;
+---------------------------------------------   прогресс создания индекса
+SELECT
+p.pid,
+now() - a.query_start AS elapsed,
+p.datname,
+p.command,
+p.phase,
+p.lockers_total,
+p.lockers_done,
+p.blocks_total,
+p.blocks_done,
+CASE WHEN p.blocks_total > 0
+THEN round(100.0 * p.blocks_done / p.blocks_total, 2)
+ELSE NULL
+END AS blocks_pct,
+p.tuples_total,
+p.tuples_done,
+CASE WHEN p.tuples_total > 0
+THEN round(100.0 * p.tuples_done / p.tuples_total, 2)
+ELSE NULL
+END AS tuples_pct,
+a.query
+FROM pg_stat_progress_create_index p
+JOIN pg_stat_activity a ON a.pid = p.pid;
+-----------------------------------------------  процессы
+SELECT
+    pid,
+    state,
+    wait_event_type,
+    wait_event,
+    age(
+        clock_timestamp(),
+        query_start
+    ) AS elapsed,
+    pg_blocking_pids(pid) AS blockers,
+    left(
+        regexp_replace(
+            query,
+            E'[\\n\\r\\t]+',
+            ' ',
+            'g'        ),
+        180
+    ) AS query
+FROM pg_stat_activity
+WHERE datname = 'pknddb'
+  AND state <> 'idle'
+  AND (
+       query ~* 'create[[:space:]]+(unique[[:space:]]+)?index'
+       OR query ~* 'primary[[:space:]]+key'
+       OR query ~* 'alter[[:space:]]+table'
+  )
+ORDER BY query_start;
