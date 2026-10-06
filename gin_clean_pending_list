@@ -1,0 +1,61 @@
+sql
+CREATE OR REPLACE PROCEDURE clean_bloated_gin_indexes(
+    p_min_pending_pages integer DEFAULT 100
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    idx_record record;
+    stats record;
+    cleaned_count integer := 0;
+BEGIN
+    -- Проверяем, установлено ли расширение pgstattuple
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_extension WHERE extname = 'pgstattuple'
+    ) THEN
+        RAISE EXCEPTION 'Расширение pgstattuple не установлено. Выполните: CREATE EXTENSION pgstattuple;';
+    END IF;
+
+    -- Проходим по всем GIN-индексам пользовательских схем
+    FOR idx_record IN
+        SELECT 
+            n.nspname AS schema_name,
+            c.relname AS index_name,
+            c.oid AS index_oid,
+            format('%I.%I', n.nspname, c.relname) AS qualified_name
+        FROM pg_class c
+        JOIN pg_index i ON i.indexrelid = c.oid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        JOIN pg_am am ON am.oid = c.relam
+        WHERE am.amname = 'gin'
+          AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+          AND c.relkind = 'i'
+    LOOP
+        BEGIN
+            -- Получаем статистику pending list
+            SELECT * INTO stats 
+            FROM pgstatginindex(idx_record.index_oid);
+            
+            -- Если pending_pages превышает порог — чистим
+            IF stats.pending_pages >= p_min_pending_pages THEN
+                RAISE NOTICE 'Очистка индекса %: pending_pages=%, pending_tuples=%',
+                    idx_record.qualified_name,
+                    stats.pending_pages,
+                    stats.pending_tuples;
+                
+                PERFORM gin_clean_pending_list(idx_record.index_oid);
+                cleaned_count := cleaned_count + 1;
+            ELSE
+                RAISE NOTICE 'Индекс % в норме: pending_pages=%',
+                    idx_record.qualified_name,
+                    stats.pending_pages;
+            END IF;
+        EXCEPTION WHEN OTHERS THEN
+            RAISE WARNING 'Не удалось обработать индекс %: %',
+                idx_record.qualified_name, SQLERRM;
+        END;
+    END LOOP;
+
+    RAISE NOTICE 'Очищено индексов: %', cleaned_count;
+END;
+$$;
